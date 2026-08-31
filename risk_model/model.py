@@ -15,7 +15,6 @@ is bad, that evidence also informs the model about retry_delayed).
 from __future__ import annotations
 
 import logging
-import pickle
 import random
 from pathlib import Path
 
@@ -31,7 +30,7 @@ from schemas.transaction import FailedTransaction
 
 logger = logging.getLogger(__name__)
 
-MODEL_PATH = Path("data/models/recovery_model.pkl")
+MODEL_PATH = Path("data/models/recovery_model.json")
 TRAINING_TRANSACTIONS = 15_000  # transactions for model training (separate from test batch)
 TRAINING_SEED = 99  # different seed from simulation to avoid data leakage
 
@@ -117,16 +116,17 @@ class RecoveryModel:
         logger.info("Model training complete.")
 
     def save(self, path: Path = MODEL_PATH) -> None:
-        """Persist model to disk. Creates parent directories if needed."""
+        """Persist model to disk in native XGBoost JSON format. Creates parent directories if needed."""
+        if self._model is None:
+            raise RuntimeError("Cannot save uninitialized model.")
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(self._model, f)
-        logger.info("Model saved to %s", path)
+        self._model.save_model(str(path))
+        logger.info("Model saved to %s (XGBoost JSON)", path)
 
     def load(self, path: Path = MODEL_PATH) -> None:
-        """Load a previously saved model from disk."""
-        with open(path, "rb") as f:
-            self._model = pickle.load(f)  # noqa: S301 — trusted internal pickle
+        """Load a previously saved XGBoost model from JSON disk artifact."""
+        self._model = xgb.XGBClassifier()
+        self._model.load_model(str(path))
         self._shap_explainer = SHAPExplainer(self._model)
         logger.info("Model loaded from %s", path)
 

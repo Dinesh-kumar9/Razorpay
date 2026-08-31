@@ -79,9 +79,13 @@ async def index(request: Request) -> HTMLResponse:
             # Regenerate the same synthetic set to compute blind-retry baseline
             txns = generate_transactions(n=record_count, random_seed=42)
             blind_rng = random.Random(1042)
+            multi_rng = random.Random(2042)
+            from simulation.baselines import run_blind_retry_baseline, run_naive_multi_retry_baseline
             recovered_blind = run_blind_retry_baseline(txns, blind_rng)
-            metrics = compute_metrics(records, recovered_blind)
-        except Exception:
+            recovered_multi = run_naive_multi_retry_baseline(txns, multi_rng)
+            metrics = compute_metrics(records, recovered_blind, recovered_multi, seed=42)
+        except Exception as exc:
+            logging.getLogger(__name__).error("Dashboard metrics failed: %s", exc, exc_info=True)
             metrics = None
 
     return templates.TemplateResponse(
