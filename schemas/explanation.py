@@ -14,34 +14,34 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class LLMExplanation(BaseModel):
     """
-    Advisory explanation produced by Claude Haiku 4.5, or by a deterministic
-    template if the LLM call fails for any reason.
+    Advisory explanation produced by Google Gemini 2.5 Flash, or by a deterministic
+    template fallback if the LLM call fails or the API key is unset.
 
-    This object is NEVER an input to execution — it is documentation only.
-    The action it explains is already fixed by the time this is generated.
+    INVARIANT: This schema contains ONLY language fields (rationale, caveat, fallback).
+    It contains NO action field, NO decision field, NO execution instructions.
+    The LLM cannot alter what action is taken — only explain it.
     """
+
+    model_config = ConfigDict(protected_namespaces=())
 
     rationale: str = Field(
         max_length=600,
-        description=(
-            "Plain-English explanation of why this action was chosen, "
-            "written for a merchant ops analyst, not a data scientist."
-        ),
+        description="Plain-English explanation of why this action was chosen, based on failure reason and risk model signals.",
     )
     confidence_caveat: str = Field(
         max_length=350,
-        description="One uncertainty or limitation the merchant should know about this decision.",
+        description="Explicit statement of what could go wrong or why confidence is not 100%. Never omitted.",
     )
     fallback_if_wrong: str = Field(
         max_length=350,
-        description="What the system will do if this action does not recover the payment.",
+        description="Deterministic next step if the recommended action fails (e.g. 'If retry fails, nudge for alternative payment method').",
     )
-    source: Literal["llm", "template"] = Field(
+    source: str = Field(
         default="llm",
-        description="Records whether this explanation came from Claude ('llm') or the fallback template ('template').",
+        description="Records whether this explanation came from Gemini ('llm') or the fallback template ('template').",
     )

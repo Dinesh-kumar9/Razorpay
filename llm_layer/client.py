@@ -1,13 +1,15 @@
 """
-LLM explanation client — Claude Haiku 4.5, advisory-only, never blocks the pipeline.
+LLM explanation client — Google Gemini 2.5 Flash, advisory-only, never blocks the pipeline.
 
 This client has one contract: given a policy decision and context, return a
 valid LLMExplanation. It NEVER raises an exception. On any failure (missing key,
-API error, malformed JSON, schema validation failure), it returns the deterministic
+API error, malformed response, schema validation failure), it returns the deterministic
 template fallback and logs the reason.
 
-Architecture decision: docs/adr/0001-llm-has-no-execution-authority.md
-Architecture decision: docs/adr/0005-llm-fallback-design.md
+Architecture decisions:
+  - docs/adr/0001-llm-has-no-execution-authority.md
+  - docs/adr/0004-no-agent-framework.md
+  - docs/adr/0005-single-llm-provider-no-fallback.md
 """
 
 from __future__ import annotations
@@ -17,8 +19,13 @@ import logging
 import os
 from decimal import Decimal
 
-import anthropic
-import requests
+from dotenv import load_dotenv
+
+# Ensure .env is loaded before client instantiation
+load_dotenv(override=True)
+
+from google import genai
+from google.genai import types
 from pydantic import ValidationError
 
 from llm_layer.fallback import get_fallback_explanation
@@ -28,16 +35,15 @@ from schemas.explanation import LLMExplanation
 
 logger = logging.getLogger(__name__)
 
-# Claude Haiku 4.5 — fast, cheap, sufficient for structured JSON explanations.
-CLAUDE_MODEL_ANTHROPIC = "claude-3-5-haiku-20241022"
-CLAUDE_MODEL_OPENROUTER = "anthropic/claude-haiku-4.5"
-MAX_TOKENS = 200  # LLMExplanation fields total <=700 chars; 200 tokens is ample
-TIMEOUT_SECONDS = 12.0  # Never block the pipeline longer than this
+# Gemini 2.5 Flash — fast, structured output support, free-tier eligible
+GEMINI_MODEL = "gemini-2.5-flash"
+MAX_TOKENS = 1000
+TIMEOUT_SECONDS = 12.0
 
 
 class LLMExplainer:
     """
-    Advisory-only explanation layer backed by Claude Haiku 4.5.
+    Advisory-only explanation layer backed by Google Gemini 2.5 Flash.
 
     The LLM has zero execution authority. It cannot change the final_action.
     It can only produce a natural-language explanation of a decision already made.
@@ -47,36 +53,22 @@ class LLMExplainer:
         # No exception handling needed — fallback is internal.
     """
 
-    def __init__(self) -> None:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-        base_url = os.environ.get("ANTHROPIC_BASE_URL", "").strip()
+    def __init__(self, api_key: str | None = None) -> None:
+        if api_key is None:
+            api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
         self._api_key = api_key
-        self._base_url = base_url
         self._has_key = bool(api_key)
 
-        # Detect OpenRouter vs Direct Anthropic
-        self._is_openrouter = "openrouter" in base_url.lower() or api_key.startswith("sk-or-")
-
         if self._has_key:
-            if self._is_openrouter:
-                self._openrouter_url = (
-                    base_url.rstrip("/") + "/chat/completions"
-                    if not base_url.endswith("/chat/completions")
-                    else base_url
-                )
-                self._client = None
-                logger.info("LLM explainer initialized with Claude Haiku 4.5 via OpenRouter.")
-            else:
-                self._client = anthropic.Anthropic(
-                    api_key=api_key,
-                    base_url=base_url if base_url else None,
-                )
-                logger.info("LLM explainer initialized with Claude Haiku 4.5 via Anthropic SDK.")
+            # Explicitly force Gemini Developer API (API-key mode), not Vertex AI
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+            self._client = genai.Client(api_key=api_key)
+            logger.info("LLM explainer initialized with Google Gemini 2.5 Flash via google-genai SDK.")
         else:
             self._client = None
             logger.info(
-                "ANTHROPIC_API_KEY not set — LLM explainer will use template fallback for all decisions."
+                "GEMINI_API_KEY not set — LLM explainer will use template fallback for all decisions."
             )
 
     def explain(
@@ -91,14 +83,15 @@ class LLMExplainer:
         Generate a natural-language explanation for the given policy decision.
 
         Attempt order:
-          1. Call Claude Haiku 4.5 with structured prompt
+          1. Call Gemini 2.5 Flash with native response_schema=LLMExplanation
           2. Parse JSON from response
           3. Validate against LLMExplanation schema
           4. If any step fails -> return deterministic template fallback
 
         This method NEVER raises. The pipeline never blocks on an LLM call.
         """
-        if not self._has_key:
+        if not self._has_key or self._client is None:
+            logger.info("FALLBACK")
             return get_fallback_explanation(policy_decision, shap_features, failure_code)
 
         try:
@@ -110,48 +103,29 @@ class LLMExplainer:
                 failure_code=failure_code,
             )
 
-            raw_text = ""
-            if self._is_openrouter:
-                headers = {
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                }
-                payload = {
-                    "model": CLAUDE_MODEL_OPENROUTER,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "max_tokens": MAX_TOKENS,
-                }
-                res = requests.post(
-                    self._openrouter_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=TIMEOUT_SECONDS,
-                )
-                if res.status_code == 200:
-                    data = res.json()
-                    choices = data.get("choices", [])
-                    if choices:
-                        raw_text = choices[0]["message"]["content"].strip()
-                else:
-                    logger.warning("OpenRouter API returned status %d: %.200s", res.status_code, res.text)
-                    return get_fallback_explanation(policy_decision, shap_features, failure_code)
-            elif self._client is not None:
-                message = self._client.messages.create(
-                    model=CLAUDE_MODEL_ANTHROPIC,
-                    max_tokens=MAX_TOKENS,
-                    system=SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_prompt}],
-                    timeout=TIMEOUT_SECONDS,
-                )
-                raw_text = message.content[0].text.strip()
+            config = types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=LLMExplanation,
+                temperature=0.2,
+                max_output_tokens=MAX_TOKENS,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            )
 
+            response = self._client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=user_prompt,
+                config=config,
+            )
+
+            raw_text = response.text.strip() if response.text else ""
             if not raw_text:
+                logger.warning("Empty response received from Gemini; using template fallback.")
+                logger.info("FALLBACK")
                 return get_fallback_explanation(policy_decision, shap_features, failure_code)
 
-            # Strip any accidental markdown code fences
+            # Strip code fences if present
             if raw_text.startswith("```"):
                 lines = raw_text.split("\n")
                 raw_text = "\n".join(lines[1:-1]) if len(lines) > 2 else raw_text
@@ -161,6 +135,7 @@ class LLMExplainer:
 
             parsed = json.loads(raw_text)
             if isinstance(parsed, dict):
+                # Ensure length constraints
                 if "rationale" in parsed and isinstance(parsed["rationale"], str):
                     parsed["rationale"] = parsed["rationale"][:590]
                 if "confidence_caveat" in parsed and isinstance(parsed["confidence_caveat"], str):
@@ -169,17 +144,15 @@ class LLMExplainer:
                     parsed["fallback_if_wrong"] = parsed["fallback_if_wrong"][:340]
 
             explanation = LLMExplanation(**parsed, source="llm")
+            logger.info("LIVE_CALL")
             return explanation
 
-        except (anthropic.APIError, anthropic.APITimeoutError) as exc:
-            logger.warning("Anthropic API error; using template fallback. Error: %.200s", str(exc))
-        except requests.RequestException as exc:
-            logger.warning("Network request error to LLM provider; using template fallback: %.200s", str(exc))
         except json.JSONDecodeError as exc:
-            logger.warning("Claude non-JSON response; using template fallback: %s", exc)
+            logger.warning("Gemini non-JSON response: %s", exc)
         except ValidationError as exc:
-            logger.warning("Claude schema validation failed; using template fallback: %s", exc)
+            logger.warning("Gemini schema validation failed: %s", exc)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected LLM error; using template fallback. Type: %s", type(exc).__name__)
+            logger.warning("Gemini API error [%s]: %s", type(exc).__name__, exc)
 
+        logger.info("FALLBACK")
         return get_fallback_explanation(policy_decision, shap_features, failure_code)

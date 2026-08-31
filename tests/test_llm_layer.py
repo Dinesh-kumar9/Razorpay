@@ -1,5 +1,5 @@
 """
-Test suite for the LLM explanation layer.
+Test suite for the LLM explanation layer (Google Gemini 2.5 Flash).
 
 Key invariants:
   1. explain() NEVER raises — any failure returns a valid LLMExplanation
@@ -14,9 +14,7 @@ import json
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import anthropic
 import pytest
-import requests
 
 from llm_layer.client import LLMExplainer
 from llm_layer.fallback import get_fallback_explanation
@@ -97,9 +95,9 @@ class TestLLMExplainer:
     """LLMExplainer.explain() never raises; falls back on any failure."""
 
     def test_no_api_key_returns_template(self) -> None:
-        """When ANTHROPIC_API_KEY is not set, fallback is used immediately."""
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "", "ANTHROPIC_BASE_URL": ""}, clear=False):
-            explainer = LLMExplainer()
+        """When GEMINI_API_KEY is not set, fallback is used immediately."""
+        with patch.dict("os.environ", {"GEMINI_API_KEY": ""}, clear=False):
+            explainer = LLMExplainer(api_key="")
         pd = make_policy_decision()
         result = explainer.explain(pd, make_shap_features(), "bank error", Decimal("1000"), "insufficient_funds")
         assert isinstance(result, LLMExplanation)
@@ -107,15 +105,9 @@ class TestLLMExplainer:
 
     def test_api_exception_returns_template(self) -> None:
         """API call raising any exception → fallback, no raise."""
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test", "ANTHROPIC_BASE_URL": ""}, clear=False):
-            explainer = LLMExplainer()
-
-        explainer._has_key = True
-        explainer._is_openrouter = False
+        explainer = LLMExplainer(api_key="mock_key")
         mock_client = MagicMock()
-        mock_client.messages.create.side_effect = anthropic.APIError(
-            message="Service unavailable", request=MagicMock(), body={}
-        )
+        mock_client.models.generate_content.side_effect = RuntimeError("API down")
         explainer._client = mock_client
 
         pd = make_policy_decision()
@@ -125,15 +117,11 @@ class TestLLMExplainer:
 
     def test_malformed_json_returns_template(self) -> None:
         """LLM returning non-JSON → fallback."""
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test", "ANTHROPIC_BASE_URL": ""}, clear=False):
-            explainer = LLMExplainer()
-
-        explainer._has_key = True
-        explainer._is_openrouter = False
+        explainer = LLMExplainer(api_key="mock_key")
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Sorry, I cannot help with that.")]
-        mock_client.messages.create.return_value = mock_response
+        mock_response.text = "Not JSON at all"
+        mock_client.models.generate_content.return_value = mock_response
         explainer._client = mock_client
 
         pd = make_policy_decision()
@@ -142,16 +130,12 @@ class TestLLMExplainer:
         assert result.source == "template"
 
     def test_schema_validation_failure_returns_template(self) -> None:
-        """LLM returning JSON with wrong fields → Pydantic rejects → fallback."""
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test", "ANTHROPIC_BASE_URL": ""}, clear=False):
-            explainer = LLMExplainer()
-
-        explainer._has_key = True
-        explainer._is_openrouter = False
+        """LLM returning JSON with missing fields → Pydantic rejects → fallback."""
+        explainer = LLMExplainer(api_key="mock_key")
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = [MagicMock(text='{"wrong_field": "wrong_value"}')]
-        mock_client.messages.create.return_value = mock_response
+        mock_response.text = '{"wrong_field": "wrong_value"}'
+        mock_client.models.generate_content.return_value = mock_response
         explainer._client = mock_client
 
         pd = make_policy_decision()
@@ -159,51 +143,22 @@ class TestLLMExplainer:
         assert isinstance(result, LLMExplanation)
         assert result.source == "template"
 
-    def test_valid_anthropic_response_returns_llm_source(self) -> None:
-        """Valid Claude Anthropic SDK response → source='llm'."""
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test", "ANTHROPIC_BASE_URL": ""}, clear=False):
-            explainer = LLMExplainer()
-
-        explainer._has_key = True
-        explainer._is_openrouter = False
+    def test_valid_gemini_response_returns_llm_source(self) -> None:
+        """Valid Gemini SDK response → source='llm'."""
+        explainer = LLMExplainer(api_key="mock_key")
         mock_client = MagicMock()
         mock_response = MagicMock()
         valid_json = json.dumps({
             "rationale": "This payment failed due to insufficient funds. Historical data shows delayed retry works best.",
-            "confidence_caveat": "Recovery is not guaranteed if the customer's balance doesn't increase.",
+            "confidence_caveat": "Recovery is not guaranteed if the customer balance does not increase.",
             "fallback_if_wrong": "If delayed retry fails, a nudge for alternative payment will be sent.",
         })
-        mock_response.content = [MagicMock(text=valid_json)]
-        mock_client.messages.create.return_value = mock_response
+        mock_response.text = valid_json
+        mock_client.models.generate_content.return_value = mock_response
         explainer._client = mock_client
 
         pd = make_policy_decision(RecoveryAction.RETRY_DELAYED)
         result = explainer.explain(pd, make_shap_features(), "insufficient funds", Decimal("3000"), "insufficient_funds")
-        assert isinstance(result, LLMExplanation)
-        assert result.source == "llm"
-        assert "insufficient funds" in result.rationale.lower()
-
-    def test_valid_openrouter_response_returns_llm_source(self) -> None:
-        """Valid Claude OpenRouter response → source='llm'."""
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-or-v1-test", "ANTHROPIC_BASE_URL": "https://openrouter.ai/api/v1"}, clear=False):
-            explainer = LLMExplainer()
-
-        valid_json = json.dumps({
-            "rationale": "This payment failed due to insufficient funds. Historical data shows delayed retry works best.",
-            "confidence_caveat": "Recovery is not guaranteed if the customer's balance doesn't increase.",
-            "fallback_if_wrong": "If delayed retry fails, a nudge for alternative payment will be sent.",
-        })
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": f"```json\n{valid_json}\n```"}}]
-        }
-
-        with patch("requests.post", return_value=mock_resp):
-            pd = make_policy_decision(RecoveryAction.RETRY_DELAYED)
-            result = explainer.explain(pd, make_shap_features(), "insufficient funds", Decimal("3000"), "insufficient_funds")
-
         assert isinstance(result, LLMExplanation)
         assert result.source == "llm"
         assert "insufficient funds" in result.rationale.lower()

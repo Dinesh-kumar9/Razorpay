@@ -1,10 +1,15 @@
 """
 LLM prompt construction for the explanation layer.
 
-The system prompt enforces JSON-only output and embeds the schema definition
-inline so Claude has no ambiguity about what to produce. Every field has a
-character limit because an unconstrained LLM explanation would make the audit
-log unreadable — brevity is a feature, not a constraint.
+Prompts for the LLM explanation layer (Google Gemini 2.5 Flash).
+
+Key design decisions:
+- Single-turn JSON generation: we include the exact JSON schema and an example
+  inline so Gemini has no ambiguity about what to produce. Every field has a
+  strict character limit enforced by prompt and Pydantic validation.
+- Grounding: the prompt includes the model's confidence, SHAP features, and the
+  exact policy rule applied, ensuring the LLM explains what happened rather than
+  hallucinating a reason.
 
 Architecture decision: docs/adr/0005-llm-fallback-design.md
 """
@@ -39,7 +44,7 @@ def build_user_prompt(
     failure_code: str,
 ) -> str:
     """
-    Build the user-turn prompt for Claude.
+    Build the user-turn prompt for Gemini.
 
     Passes structured context in a readable format rather than raw JSON to
     get better natural-language explanations from the model.

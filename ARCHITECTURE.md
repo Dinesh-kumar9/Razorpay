@@ -25,7 +25,7 @@ flowchart TD
     B --> C["Policy Engine\nDeterministic guardrails\nFinal authority"]
     C -->|"Guardrail fires: overrides"| D["PolicyDecision\n(was_overridden=True)"]
     C -->|"No rule fires: passes through"| D
-    D --> E["LLM Explainer\nClaude claude-haiku-4-5\nAdvisory only"]
+    D --> E["LLM Explainer\nGoogle Gemini 2.5 Flash\nAdvisory only"]
     E -->|"LLMExplanation\n(read-only, never executed)"| F["Simulated Executor\nLogs action intent\nNo real money moved"]
     F --> G["Outcome Simulation\nBernoulli(P_contextual)\nBatch evaluation"]
     G --> H["Audit Logger\nSQLite append-only\nImmutable record"]
@@ -97,7 +97,7 @@ The engine's override rate (73.8% in baseline simulation) is high because
 
 **Files:** [`llm_layer/client.py`](llm_layer/client.py), [`llm_layer/fallback.py`](llm_layer/fallback.py)
 
-Claude claude-haiku-4-5 generates a human-readable explanation for the policy decision.
+Google Gemini 2.5 Flash (`google-genai` SDK) generates a human-readable explanation for the policy decision.
 The explanation is **advisory only** — it is written to the audit log and shown in the
 dashboard, but it is never read by the executor or metrics layer.
 
@@ -105,7 +105,7 @@ dashboard, but it is never read by the executor or metrics layer.
 falls back to a deterministic template (`fallback.py`). The `llm_fallback_to_template_count`
 metric is reported honestly, even when non-zero.
 
-**Why Anthropic-only (no fallback provider):** See [`docs/adr/0001-llm-has-no-execution-authority.md`](docs/adr/0001-llm-has-no-execution-authority.md).
+**Single provider architecture:** See [`docs/adr/0005-llm-fallback-design.md`](docs/adr/0005-llm-fallback-design.md).
 
 ### Stage 5 — Simulated Executor
 
@@ -195,7 +195,7 @@ Test coverage: `tests/test_policy_engine.py` — 43 test cases, including:
 
 | Concern | Choice | Rationale |
 |---------|--------|-----------|
-| LLM | Claude claude-haiku-4-5 (Anthropic) | ADR 0001: one provider reduces failure surface |
+| LLM | Google Gemini 2.5 Flash (`google-genai`) | ADR 0005: native schema-constrained output, single provider |
 | ML | XGBoost | Interpretable via SHAP; fast; no GPU required |
 | Guardrails | Plain Python | ADR 0007: legible, auditable, no framework indirection |
 | Dashboard | HTMX + FastAPI | ADR 0006: server-rendered, no client state to reason about |
@@ -210,10 +210,10 @@ See [`docs/adr/`](docs/adr/) for the full decision record.
 
 ```bash
 # Install dependencies
-pip install -e ".[dev]"
+pip install -r requirements.txt
 
 # Set API key
-export ANTHROPIC_API_KEY="sk-ant-..."
+export GEMINI_API_KEY="AQ.Ab8..."
 
 # Run the simulation (5,000 transactions, seed=42)
 python -m simulation.runner 5000 42

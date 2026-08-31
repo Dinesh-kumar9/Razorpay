@@ -71,8 +71,11 @@ is an `LLMExplanation` object that is written to the audit log and displayed in 
 |-----------|-------------|
 | LangGraph | State machine overhead for a one-shot pipeline; safety properties depend on graph config correctness |
 | CrewAI | Multi-agent design optimised for collaboration; we have a single agent with a single role |
-| AutoGen | Requires GPT-4 by default; we committed to Anthropic-only |
+| AutoGen | Requires GPT-4 by default; we committed to single-provider LLM (Google Gemini) |
 | LlamaIndex Agents | Tool-calling focus; we deliberately have no tools for the LLM to call |
+
+## Addendum: Gemini Provider Switch
+Reconsidered at the Gemini provider switch — LangChain would not simplify this swap, since the existing client is already a single-class, single-schema abstraction sized to the one call site needed. Decision unchanged.
 
 ## Audit Trail
 
@@ -82,3 +85,4 @@ The absence of an agent framework can be independently verified:
 grep -r "langchain\|langgraph\|crewai\|autogen\|llamaindex" pyproject.toml  # no results
 grep -r "AgentExecutor\|Crew\|Graph\|Pipeline" simulation/runner.py  # no results
 ```
+

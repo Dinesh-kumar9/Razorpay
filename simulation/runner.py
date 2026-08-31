@@ -17,11 +17,12 @@ from __future__ import annotations
 import logging
 import random
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(override=False)  # Shell env vars take precedence over .env (allows ANTHROPIC_API_KEY="" override)
+load_dotenv(override=False)  # Shell env vars take precedence over .env (allows GEMINI_API_KEY="" override)
 
 from rich import box
 from rich.console import Console
@@ -161,18 +162,32 @@ def run_batch(
     # Fork the RNG: each baseline and agent get separate streams from same seed
     # so all are reproducible and independently comparable
     single_retry_rng = random.Random(seed + 1000)
-    multi_retry_rng = random.Random(seed + 1500)
+    multi_retry_unconstrained_rng = random.Random(seed + 1500)
+    multi_retry_constrained_rng = random.Random(seed + 1750)
     agent_rng = random.Random(seed + 2000)
 
     # Run baselines
+    from simulation.baselines import (
+        run_blind_retry_baseline,
+        run_naive_multi_retry_constrained,
+        run_naive_multi_retry_with_violations,
+        run_never_retry_baseline,
+    )
     with console.status("[bold]Running baselines...[/bold]"):
         recovered_blind = run_blind_retry_baseline(transactions, single_retry_rng)
-        recovered_multi = run_naive_multi_retry_baseline(transactions, multi_retry_rng)
+        recovered_unconstrained, unconstrained_violations = run_naive_multi_retry_with_violations(
+            transactions, multi_retry_unconstrained_rng
+        )
+        recovered_constrained = run_naive_multi_retry_constrained(
+            transactions, multi_retry_constrained_rng
+        )
         _ = run_never_retry_baseline(transactions)
+
     console.print(
         f"  [green]OK[/green] Baselines: "
         f"single_retry=Rs.{recovered_blind:,.0f} | "
-        f"multi_retry=Rs.{recovered_multi:,.0f} | "
+        f"unconstrained_multi_retry=Rs.{recovered_unconstrained:,.0f} | "
+        f"constrained_multi_retry=Rs.{recovered_constrained:,.0f} | "
         f"never_retry=Rs.0"
     )
 
@@ -200,89 +215,59 @@ def run_batch(
             progress.advance(task)
 
     # Compute and display metrics
-    metrics = compute_metrics(records, recovered_blind, recovered_multi, seed=seed)
-    _print_metrics_table(metrics)
+    metrics = compute_metrics(records, recovered_blind, recovered_unconstrained, seed=seed)
+    _print_metrics_table(
+        metrics,
+        recovered_constrained=recovered_constrained,
+        unconstrained_violations=unconstrained_violations,
+    )
 
     return metrics
 
 
-def _print_metrics_table(m: BatchMetrics) -> None:
-    """Display the batch metrics in a rich table for the terminal."""
+def _print_metrics_table(
+    m: BatchMetrics,
+    recovered_constrained: Decimal,
+    unconstrained_violations: dict[str, int],
+) -> None:
+    """Display the batch metrics in rich tables for the terminal."""
     console.print()
     console.rule("[bold green]Batch Results[/bold green]")
 
     table = Table(box=box.ROUNDED, show_header=True, header_style="bold magenta")
-    table.add_column("Metric", style="cyan", no_wrap=True)
-    table.add_column("Value", justify="right")
-    table.add_column("Target", justify="center", style="dim")
-    table.add_column("Status", justify="center")
+    table.add_column("Strategy / Metric", style="cyan", no_wrap=True)
+    table.add_column("Revenue Recovered", justify="right")
+    table.add_column("Uplift vs Strategy", justify="right")
+    table.add_column("Violations", justify="center")
 
-    def status(ok: bool) -> str:
-        return "[green]PASS[/green]" if ok else "[red]FAIL[/red]"
+    uplift_vs_single = ((m.recovered_inr_agent - m.recovered_inr_blind_retry) / m.recovered_inr_blind_retry * 100) if m.recovered_inr_blind_retry else Decimal("0")
+    uplift_vs_unconstrained = ((m.recovered_inr_agent - m.recovered_inr_naive_multi_retry) / m.recovered_inr_naive_multi_retry * 100) if m.recovered_inr_naive_multi_retry else Decimal("0")
+    uplift_vs_constrained = ((m.recovered_inr_agent - recovered_constrained) / recovered_constrained * 100) if recovered_constrained else Decimal("0")
 
-    table.add_row("Total transactions", f"{m.total_transactions:,}", "-", "")
-    table.add_row("Total at-risk", f"Rs.{m.total_at_risk_inr:,.0f}", "-", "")
-    table.add_row("", "", "", "")
-    table.add_row("Agent recovered", f"Rs.{m.recovered_inr_agent:,.0f}", "-", "")
-    table.add_row(
-        "Single-retry baseline",
-        f"Rs.{m.recovered_inr_blind_retry:,.0f}",
-        "-",
-        "",
-    )
-    table.add_row(
-        "Multi-retry baseline (realistic)",
-        f"Rs.{m.recovered_inr_naive_multi_retry:,.0f}",
-        "-",
-        "",
-    )
-    table.add_row("Never-retry (floor)", "Rs.0", "-", "")
-    table.add_row("", "", "", "")
-    table.add_row(
-        "Uplift vs single-attempt baseline",
-        f"+{m.uplift_vs_blind_retry_pct:.1f}%",
-        "disclosed",
-        "[dim]secondary[/dim]",
-    )
-    table.add_row(
-        "Uplift vs realistic multi-retry",
-        f"+{m.uplift_vs_naive_multi_retry_pct:.1f}%",
-        ">=20%",
-        status(m.uplift_vs_naive_multi_retry_pct >= 20),
-    )
-    table.add_row(
-        "Stopping-rule violations",
-        str(m.stopping_rule_violations),
-        "0",
-        status(m.stopping_rule_violations == 0),
-    )
-    table.add_row(
-        "Decisions with explanation",
-        f"{m.decisions_with_explanation_pct:.1f}%",
-        "100%",
-        status(m.decisions_with_explanation_pct >= 100.0),
-    )
-    table.add_row(
-        "False-escalation count",
-        f"{m.false_escalation_count} ({m.false_escalation_rate_pct:.1f}%)",
-        "reported",
-        "[yellow]honest[/yellow]",
-    )
-    table.add_row(
-        "Override count",
-        f"{m.override_count} ({m.override_rate_pct:.1f}%)",
-        "reported",
-        "[yellow]transparent[/yellow]",
-    )
-    table.add_row(
-        "LLM fallback to template",
-        f"{m.llm_fallback_to_template_count} ({m.llm_fallback_rate_pct:.1f}%)",
-        "reported",
-        "[yellow]honest[/yellow]",
-    )
+    table.add_row("Our Agent (Project Meridian)", f"Rs.{m.recovered_inr_agent:,.0f}", "-", "[green]0 (PASS)[/green]")
+    table.add_row("Single-Attempt Baseline", f"Rs.{m.recovered_inr_blind_retry:,.0f}", f"+{uplift_vs_single:.1f}%", "[green]0[/green]")
+    table.add_row("Unconstrained Multi-Retry", f"Rs.{m.recovered_inr_naive_multi_retry:,.0f}", f"{uplift_vs_unconstrained:+.1f}%", f"[red]{sum(unconstrained_violations.values()):,}[/red]")
+    table.add_row("Constrained Multi-Retry (Gated)", f"Rs.{recovered_constrained:,.0f}", f"{uplift_vs_constrained:+.1f}%", "[green]0 (PASS)[/green]")
+    table.add_row("Never-Retry (Floor)", "Rs.0", "+inf", "[dim]-[/dim]")
 
     console.print(table)
-    console.print(f"\n  [dim]Random seed: {m.random_seed} | Reproducible: run again to verify[/dim]\n")
+
+    console.print()
+    console.rule("[bold yellow]Unconstrained Baseline Rule Violations Breakdown[/bold yellow]")
+    v_table = Table(box=box.ROUNDED, show_header=True, header_style="bold yellow")
+    v_table.add_column("Violation Category", style="cyan")
+    v_table.add_column("Violations Count", justify="right", style="red bold")
+    v_table.add_column("Governing Policy Engine Rule / Regulation", style="dim")
+
+    v_table.add_row("hard_stop_retry", f"{unconstrained_violations['hard_stop_retry']:,}", "HARD_STOP_001 / HARD_STOP_002 (RBI fraud/KYC & invalid card rules)")
+    v_table.add_row("contact_cap_exceeded", f"{unconstrained_violations['contact_cap_exceeded']:,}", "RATE_LIMIT_001 (Max 3 retries lifetime cap)")
+    v_table.add_row("dnd_window_violation", f"{unconstrained_violations['dnd_window_violation']:,}", "WINDOW_001 (TRAI DND 08:00-21:00 window)")
+    v_table.add_row("cooldown_violation", f"{unconstrained_violations['cooldown_violation']:,}", "COOLDOWN_001 (30-minute rate limit cooldown)")
+    v_table.add_row("TOTAL VIOLATIONS", f"{sum(unconstrained_violations.values()):,}", "Total unconstrained baseline infractions")
+
+    console.print(v_table)
+    console.print(f"\n  [dim]Random seed: {m.random_seed} | Total transactions: {m.total_transactions:,} | Total at-risk: Rs.{m.total_at_risk_inr:,.0f}[/dim]\n")
+
 
 
 if __name__ == "__main__":

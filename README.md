@@ -24,7 +24,7 @@ XGBoost Uplift Model ───────────────────�
 Policy Engine (FINAL AUTHORITY) ───────────────── 6 guardrail rules, priority-ordered
      │  policy.final_action
      ▼
-LLM Explanation Layer (advisory only) ─────────── Claude Haiku 4.5 → Pydantic validate → template fallback
+LLM Explanation Layer (advisory only) ─────────── Google Gemini 2.5 Flash → Pydantic validate → template fallback
      │  explanation.rationale
      ▼
 Simulated Execution + Outcome Model
@@ -62,7 +62,7 @@ HTMX Dashboard (FastAPI + Jinja2)
 
 ```bash
 cp .env.example .env
-# Edit .env and add ANTHROPIC_API_KEY (optional — template fallback works without it)
+# Edit .env and add GEMINI_API_KEY (optional — template fallback works without it)
 
 # Step 1: Run the batch simulation (populates audit.db)
 docker compose run --rm simulation
@@ -97,8 +97,9 @@ uvicorn api.main:app --reload --port 8000
 | [0002](docs/adr/0002-policy-engine-overrides-model.md) | Policy engine overrides model |
 | [0003](docs/adr/0003-synthetic-data-provenance.md) | Fully synthetic, cited dataset |
 | [0004](docs/adr/0004-uplift-model-design.md) | Single XGBoost with action as feature |
-| [0005](docs/adr/0005-llm-fallback-design.md) | Schema-validate-or-template fallback |
+| [0005](docs/adr/0005-llm-fallback-design.md) | Schema-validate-or-template fallback (Gemini 2.5 Flash) |
 | [0006](docs/adr/0006-htmx-dashboard.md) | HTMX server-rendered dashboard |
+| [0007](docs/adr/0007-no-agent-framework.md) | No agent framework |
 
 ---
 
@@ -123,7 +124,7 @@ project-meridian/
 ├── ingestion/       Synthetic transaction generator
 ├── risk_model/      XGBoost uplift model + SHAP explainer
 ├── policy_engine/   Guardrail rules (the load-bearing component)
-├── llm_layer/       Claude Haiku 4.5 + deterministic fallback
+├── llm_layer/       Google Gemini 2.5 Flash + deterministic fallback
 ├── execution/       Simulated Razorpay API executor
 ├── audit/           Append-only SQLite audit log
 ├── simulation/      Batch runner + baselines + metrics
@@ -139,7 +140,8 @@ project-meridian/
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | No | (empty) | Claude Haiku 4.5 key. If unset, template fallback is used. |
+| `GEMINI_API_KEY` | No | (empty) | Google Gemini 2.5 Flash key. If unset, template fallback is used. |
+| `GOOGLE_GENAI_USE_VERTEXAI` | No | `false` | Force Gemini Developer API (API key mode) |
 | `API_HOST` | No | `0.0.0.0` | API bind host |
 | `API_PORT` | No | `8000` | API bind port |
 | `SIMULATION_RANDOM_SEED` | No | `42` | Simulation seed |

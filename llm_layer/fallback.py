@@ -2,9 +2,9 @@
 Deterministic fallback explanations — guaranteed to produce valid LLMExplanation.
 
 These templates fire when:
-  (a) the ANTHROPIC_API_KEY is not set
+  (a) the GEMINI_API_KEY is not set
   (b) the API call raises any exception (timeout, rate limit, etc.)
-  (c) Claude's response fails JSON parsing
+  (c) Gemini's response fails JSON parsing
   (d) The parsed JSON fails Pydantic schema validation
 
 The fallback is not a degraded experience — it's a designed safety net.
