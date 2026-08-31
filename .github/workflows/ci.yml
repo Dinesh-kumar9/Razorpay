@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    name: Lint · Type-check · Security · Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type-check (mypy)
+        run: mypy --strict .
+        continue-on-error: true   # mypy on ML libs is noisy; keep informational
+
+      - name: Security scan (bandit)
+        run: bandit -r . -x tests/ -ll
+
+      - name: Test + Coverage
+        run: pytest --cov=. --cov-report=xml --cov-fail-under=70
+        env:
+          ANTHROPIC_API_KEY: ""   # LLM tests use mocks; no key needed in CI
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+        continue-on-error: true   # Coverage upload is best-effort
+
+  reproducibility:
+    name: Simulation reproducibility check
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run simulation (run 1)
+        run: python -m simulation.runner 500 42 2>/dev/null
+        env:
+          ANTHROPIC_API_KEY: ""
+
+      - name: Export metrics (run 1)
+        run: python -c "
+from audit.logger import AuditLogger
+from simulation.metrics import compute_metrics
+from simulation.baselines import run_blind_retry_baseline
+import json, random
+a = AuditLogger()
+recs = a.get_all_records()
+import decimal
+blind_rng = random.Random(1042)
+from ingestion.generator import generate_transactions
+txns = generate_transactions(500, 42)
+blind = run_blind_retry_baseline(txns, blind_rng)
+m = compute_metrics(recs, blind)
+print(json.dumps({'uplift': m.uplift_vs_blind_retry_pct, 'violations': m.stopping_rule_violations}))
+" > run1_key_metrics.json
+
+      - name: Clear audit DB
+        run: rm -f audit.db
+
+      - name: Run simulation (run 2)
+        run: python -m simulation.runner 500 42 2>/dev/null
+        env:
+          ANTHROPIC_API_KEY: ""
+
+      - name: Export metrics (run 2)
+        run: python -c "
+from audit.logger import AuditLogger
+from simulation.metrics import compute_metrics
+from simulation.baselines import run_blind_retry_baseline
+import json, random
+a = AuditLogger()
+recs = a.get_all_records()
+blind_rng = random.Random(1042)
+from ingestion.generator import generate_transactions
+txns = generate_transactions(500, 42)
+blind = run_blind_retry_baseline(txns, blind_rng)
+m = compute_metrics(recs, blind)
+print(json.dumps({'uplift': m.uplift_vs_blind_retry_pct, 'violations': m.stopping_rule_violations}))
+" > run2_key_metrics.json
+
+      - name: Compare (must be identical)
+        run: diff run1_key_metrics.json run2_key_metrics.json && echo "Reproducibility check passed ✓"
