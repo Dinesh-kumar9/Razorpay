@@ -34,8 +34,6 @@ interaction from noise — it must identify the actual directional relationship.
 
 from __future__ import annotations
 
-import math
-
 from schemas.decision import RecoveryAction
 from schemas.transaction import FailureCode
 

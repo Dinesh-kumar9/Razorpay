@@ -15,7 +15,7 @@ Design decisions documented in docs/adr/0002-policy-engine-overrides-model.md:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timezone
+from datetime import UTC
 
 from schemas.decision import RecoveryAction
 from schemas.transaction import HARD_STOP_CODES, NO_RETRY_CODES, FailedTransaction
@@ -223,9 +223,9 @@ def check_COOLDOWN_001(
     failure_time = txn.time_of_failure
 
     if last_contact.tzinfo is None:
-        last_contact = last_contact.replace(tzinfo=timezone.utc)
+        last_contact = last_contact.replace(tzinfo=UTC)
     if failure_time.tzinfo is None:
-        failure_time = failure_time.replace(tzinfo=timezone.utc)
+        failure_time = failure_time.replace(tzinfo=UTC)
 
     minutes_since_contact = (failure_time - last_contact).total_seconds() / 60
 

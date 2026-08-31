@@ -160,7 +160,7 @@ class RecoveryModel:
         proba = self._model.predict_proba(X)[:, 1]  # P(recover) for each action
         p_by_action = {
             action.value: float(p)
-            for action, p in zip(MODEL_CANDIDATE_ACTIONS, proba)
+            for action, p in zip(MODEL_CANDIDATE_ACTIONS, proba, strict=False)
         }
 
         best_idx = int(np.argmax(proba))

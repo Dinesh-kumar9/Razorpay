@@ -11,7 +11,7 @@ Architecture decision: docs/adr/0002-policy-engine-overrides-model.md
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from policy_engine.rules import (
     RuleResult,

@@ -4,7 +4,7 @@ Unit tests for audit logger: persistence, parameterized SQL queries, pagination,
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -26,7 +26,7 @@ def temp_audit_logger(tmp_path: Path) -> AuditLogger:
 def test_log_and_query_record(temp_audit_logger: AuditLogger):
     rec = AuditRecord(
         txn_id="TXN-AUDIT-TEST-001",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         merchant_id="merch_123",
         customer_id="cust_456",
         payment_method=PaymentMethod.UPI,
@@ -68,7 +68,7 @@ def test_pagination_and_filtering(temp_audit_logger: AuditLogger):
     for i in range(15):
         rec = AuditRecord(
             txn_id=f"TXN-PAG-{i:03d}",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             merchant_id="merch_1",
             customer_id="cust_1",
             payment_method=PaymentMethod.CARD,

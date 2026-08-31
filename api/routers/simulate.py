@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -66,7 +66,7 @@ async def simulate_single(txn: FailedTransaction) -> AuditRecord:
 
     record = AuditRecord(
         txn_id=txn.txn_id,
-        timestamp=datetime.now(tz=timezone.utc),
+        timestamp=datetime.now(tz=UTC),
         amount_inr=txn.amount_inr,
         failure_code=txn.failure_code,
         payment_method=txn.payment_method,

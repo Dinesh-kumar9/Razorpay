@@ -63,7 +63,7 @@ def run_shap_ablation(
 
     # Global importance: mean absolute SHAP value per feature
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
-    ranked = sorted(zip(all_feature_names, mean_abs_shap), key=lambda x: x[1], reverse=True)
+    ranked = sorted(zip(all_feature_names, mean_abs_shap, strict=False), key=lambda x: x[1], reverse=True)
 
     total = sum(v for _, v in ranked)
     ranked_pct = [(name, val, (val / total * 100) if total > 0 else 0.0) for name, val in ranked]

@@ -5,15 +5,16 @@ Unit tests for execution layer, ingestion, simulation baselines, and FastAPI end
 from __future__ import annotations
 
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
+
 from fastapi.testclient import TestClient
 
 from api.main import app
 from execution.executor import SimulatedExecutor
 from ingestion.generator import generate_transactions
 from schemas.decision import PolicyDecision, RecoveryAction
-from schemas.transaction import FailedTransaction, FailureCode, PaymentMethod
+from schemas.transaction import FailureCode
 from simulation.baselines import (
     run_blind_retry_baseline,
     run_naive_multi_retry_baseline,
@@ -94,7 +95,7 @@ class TestFastAPIEndpoints:
             "payment_method": "upi",
             "failure_code": "insufficient_funds",
             "retry_count_so_far": 0,
-            "time_of_failure": datetime.now(timezone.utc).isoformat(),
+            "time_of_failure": datetime.now(UTC).isoformat(),
             "gateway_raw_error": "Insufficient funds in bank account",
             "customer_contact_count_24h": 0,
             "last_contact_time": None,

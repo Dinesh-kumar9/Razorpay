@@ -8,7 +8,7 @@ Tests that want to trigger a specific rule explicitly set the relevant fields.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -32,7 +32,7 @@ def make_txn(
     Build a FailedTransaction with safe defaults.
     Override only the fields relevant to the rule under test.
     """
-    base_time = datetime(2024, 8, 15, hour_of_day, 30, 0, tzinfo=timezone.utc)
+    base_time = datetime(2024, 8, 15, hour_of_day, 30, 0, tzinfo=UTC)
     last_contact: datetime | None = None
     if last_contact_minutes_ago is not None:
         last_contact = base_time - timedelta(minutes=last_contact_minutes_ago)

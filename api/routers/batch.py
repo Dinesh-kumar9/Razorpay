@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from api.dependencies import get_audit_logger, get_metrics_cache
+from api.dependencies import get_audit_logger
 from schemas.audit import AuditRecord, BatchMetrics
 
 router = APIRouter(tags=["batch"])

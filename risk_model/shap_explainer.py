@@ -55,11 +55,7 @@ class SHAPExplainer:
             shap_vals = self._explainer.shap_values(X)
 
             # shap_vals shape: (1, n_features) for binary classification
-            if isinstance(shap_vals, list):
-                # Some XGBoost versions return [neg_class_vals, pos_class_vals]
-                vals = shap_vals[1][0]
-            else:
-                vals = shap_vals[0]
+            vals = shap_vals[1][0] if isinstance(shap_vals, list) else shap_vals[0]
 
             # Exclude the last feature (candidate_action_id)
             feature_vals = vals[:-1]

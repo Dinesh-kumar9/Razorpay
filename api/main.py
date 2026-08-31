@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -63,11 +64,12 @@ app.include_router(simulate.router, prefix="/api")
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index(request: Request) -> HTMLResponse:
     """Batch summary dashboard — the first thing a judge sees."""
+    import random
+
     from api.dependencies import get_audit_logger
+    from ingestion.generator import generate_transactions
     from simulation.baselines import run_blind_retry_baseline
     from simulation.metrics import compute_metrics
-    from ingestion.generator import generate_transactions
-    import random
 
     audit = get_audit_logger()
     record_count = audit.count()
@@ -80,7 +82,10 @@ async def index(request: Request) -> HTMLResponse:
             txns = generate_transactions(n=record_count, random_seed=42)
             blind_rng = random.Random(1042)
             multi_rng = random.Random(2042)
-            from simulation.baselines import run_blind_retry_baseline, run_naive_multi_retry_baseline
+            from simulation.baselines import (
+                run_blind_retry_baseline,
+                run_naive_multi_retry_baseline,
+            )
             recovered_blind = run_blind_retry_baseline(txns, blind_rng)
             recovered_multi = run_naive_multi_retry_baseline(txns, multi_rng)
             metrics = compute_metrics(records, recovered_blind, recovered_multi, seed=42)

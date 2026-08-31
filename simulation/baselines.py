@@ -23,9 +23,9 @@ import random
 from decimal import Decimal
 
 from policy_engine.rules import (
-    COOLDOWN_MINUTES,
     CONTACT_WINDOW_END_HOUR,
     CONTACT_WINDOW_START_HOUR,
+    COOLDOWN_MINUTES,
     MAX_RETRIES_PER_TXN,
 )
 from risk_model.recovery_rates import get_contextual_recovery_rate

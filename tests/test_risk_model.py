@@ -4,18 +4,17 @@ Unit tests for the risk model, feature extraction, recovery rates, and SHAP expl
 
 from __future__ import annotations
 
-from decimal import Decimal
 from pathlib import Path
 
-import pytest
-import numpy as np
-
 from ingestion.generator import generate_transactions
-from risk_model.features import extract_features, FEATURE_NAMES, FeatureVector
-from risk_model.model import RecoveryModel, MODEL_PATH
-from risk_model.recovery_rates import get_contextual_recovery_rate, get_recovery_rate, RECOVERY_RATES
-from schemas.decision import RecoveryAction, MODEL_CANDIDATE_ACTIONS
-from schemas.transaction import FailureCode, FailedTransaction
+from risk_model.features import FEATURE_NAMES, FeatureVector, extract_features
+from risk_model.model import RecoveryModel
+from risk_model.recovery_rates import (
+    get_contextual_recovery_rate,
+    get_recovery_rate,
+)
+from schemas.decision import MODEL_CANDIDATE_ACTIONS, RecoveryAction
+from schemas.transaction import FailureCode
 
 
 class TestRecoveryRates:

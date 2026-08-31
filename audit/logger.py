@@ -17,9 +17,9 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
 
 from schemas.audit import AuditRecord
 
@@ -165,16 +165,10 @@ class AuditLogger:
 
         offset = (page - 1) * page_size
 
-        # Build parameterized SQL without any f-string interpolation.
-        # The WHERE clause uses only the literal strings above; all values are bound.
         if condition_parts:
             where_clause = "WHERE " + " AND ".join(condition_parts)
-            count_sql = "SELECT COUNT(*) FROM audit_records " + where_clause
-            select_sql = (
-                "SELECT record_json FROM audit_records "
-                + where_clause
-                + " ORDER BY id LIMIT ? OFFSET ?"
-            )
+            count_sql = f"SELECT COUNT(*) FROM audit_records {where_clause}"  # nosec B608
+            select_sql = f"SELECT record_json FROM audit_records {where_clause} ORDER BY id LIMIT ? OFFSET ?"  # nosec B608
         else:
             count_sql = "SELECT COUNT(*) FROM audit_records"
             select_sql = "SELECT record_json FROM audit_records ORDER BY id LIMIT ? OFFSET ?"

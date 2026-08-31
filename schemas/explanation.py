@@ -12,9 +12,7 @@ This makes the fallback rate a visible, honest metric rather than a hidden failu
 
 from __future__ import annotations
 
-from typing import Literal
-
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LLMExplanation(BaseModel):

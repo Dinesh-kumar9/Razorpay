@@ -11,7 +11,7 @@ Full distribution rationale and sources: docs/data_provenance.md
 from __future__ import annotations
 
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -121,7 +121,7 @@ def _weighted_choice(
     distribution: list[tuple[Any, float]], rng: random.Random
 ) -> Any:
     """Pick a value from a weighted distribution using the given RNG."""
-    choices, weights = zip(*distribution)
+    choices, weights = zip(*distribution, strict=False)
     return rng.choices(list(choices), weights=list(weights), k=1)[0]
 
 
@@ -146,7 +146,7 @@ def generate_transactions(
     transactions: list[FailedTransaction] = []
 
     # Simulate over a 7-day window ending now
-    window_end = datetime(2024, 8, 15, 23, 59, 59, tzinfo=timezone.utc)
+    window_end = datetime(2024, 8, 15, 23, 59, 59, tzinfo=UTC)
     window_start = window_end - timedelta(days=7)
 
     for i in range(n):

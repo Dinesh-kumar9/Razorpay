@@ -7,7 +7,7 @@ If a schema test fails, something fundamental has changed in the data contract.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -41,7 +41,7 @@ class TestFailedTransaction:
             retry_count_so_far=0,
             customer_id="CUST-001",
             merchant_id="MERCH-001",
-            time_of_failure=datetime.now(tz=timezone.utc),
+            time_of_failure=datetime.now(tz=UTC),
             gateway_raw_error="BANK_DECLINED: Insufficient funds",
             customer_contact_count_24h=0,
         )
@@ -58,7 +58,7 @@ class TestFailedTransaction:
                 retry_count_so_far=0,
                 customer_id="CUST-001",
                 merchant_id="MERCH-001",
-                time_of_failure=datetime.now(tz=timezone.utc),
+                time_of_failure=datetime.now(tz=UTC),
                 gateway_raw_error="error",
                 customer_contact_count_24h=0,
             )
@@ -73,7 +73,7 @@ class TestFailedTransaction:
                 retry_count_so_far=-1,
                 customer_id="CUST-001",
                 merchant_id="MERCH-001",
-                time_of_failure=datetime.now(tz=timezone.utc),
+                time_of_failure=datetime.now(tz=UTC),
                 gateway_raw_error="error",
                 customer_contact_count_24h=0,
             )
@@ -85,11 +85,11 @@ class TestFailedTransaction:
             FailureCode.KYC_HOLD,
             FailureCode.STOLEN_CARD,
         }
-        assert HARD_STOP_CODES == hard_stops
+        assert hard_stops == HARD_STOP_CODES
 
     def test_no_retry_codes_set_correct(self) -> None:
         no_retry = {FailureCode.CARD_EXPIRED, FailureCode.INVALID_CARD}
-        assert NO_RETRY_CODES == no_retry
+        assert no_retry == NO_RETRY_CODES
 
 
 class TestLLMExplanation:

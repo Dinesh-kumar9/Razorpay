@@ -10,7 +10,7 @@ Verifies:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -35,7 +35,7 @@ def _create_audit_record(
     txn = make_txn(failure_code=failure_code, amount=amount_inr)
     return AuditRecord(
         txn_id=txn.txn_id,
-        timestamp=datetime.now(tz=timezone.utc),
+        timestamp=datetime.now(tz=UTC),
         amount_inr=amount_inr,
         failure_code=failure_code,
         payment_method=PaymentMethod.UPI,

@@ -9,7 +9,7 @@ to something a merchant ops analyst would recognise as meaningful.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timezone
+from datetime import UTC
 
 from schemas.transaction import FailedTransaction, FailureCode, PaymentMethod
 
@@ -107,9 +107,9 @@ def extract_features(txn: FailedTransaction) -> FeatureVector:
         last = txn.last_contact_time
         failure = txn.time_of_failure
         if last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
+            last = last.replace(tzinfo=UTC)
         if failure.tzinfo is None:
-            failure = failure.replace(tzinfo=timezone.utc)
+            failure = failure.replace(tzinfo=UTC)
         minutes_since = (failure - last).total_seconds() / 60
         # Decay: 0 min → 1.0, 120 min → 0.0 (clamped)
         contact_proximity = max(0.0, 1.0 - (minutes_since / 120.0))

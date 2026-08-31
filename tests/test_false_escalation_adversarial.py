@@ -21,13 +21,14 @@ Audit citation: simulation/metrics.py lines 67-69.
 
 from __future__ import annotations
 
+from datetime import UTC
 from decimal import Decimal
 
 import pytest
 
 from schemas.audit import AuditRecord, BatchMetrics
 from schemas.decision import RecoveryAction
-from schemas.transaction import FailureCode, HARD_STOP_CODES
+from schemas.transaction import HARD_STOP_CODES, FailureCode
 from simulation.metrics import compute_metrics
 from tests.conftest import make_txn
 
@@ -40,14 +41,15 @@ def _minimal_audit_record(
     recovered: bool = False,
 ) -> AuditRecord:
     """Build a minimal AuditRecord for metrics testing."""
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from schemas.audit import SimulatedOutcome
     from schemas.explanation import LLMExplanation
 
     amount = txn.amount_inr
     return AuditRecord(
         txn_id=txn.txn_id,
-        timestamp=datetime.now(tz=timezone.utc),
+        timestamp=datetime.now(tz=UTC),
         amount_inr=amount,
         failure_code=txn.failure_code,
         payment_method=txn.payment_method,

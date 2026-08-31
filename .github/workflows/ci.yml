@@ -13,10 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
@@ -33,9 +33,10 @@ jobs:
         run: bandit -r . -x tests/ -ll
 
       - name: Test + Coverage
-        run: pytest --cov=. --cov-report=xml --cov-fail-under=70
+        run: pytest --cov=. --cov-report=xml --cov-fail-under=75
         env:
-          ANTHROPIC_API_KEY: ""   # LLM tests use mocks; no key needed in CI
+          GEMINI_API_KEY: ""   # LLM unit tests use mocks; no live key needed in CI
+          GOOGLE_GENAI_USE_VERTEXAI: "false"
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
@@ -50,10 +51,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
@@ -62,24 +63,27 @@ jobs:
       - name: Run simulation (run 1)
         run: python -m simulation.runner 500 42 2>/dev/null
         env:
-          ANTHROPIC_API_KEY: ""
+          GEMINI_API_KEY: ""
+          GOOGLE_GENAI_USE_VERTEXAI: "false"
 
       - name: Export metrics (run 1)
-        run: python -c "
-from audit.logger import AuditLogger
-from simulation.metrics import compute_metrics
-from simulation.baselines import run_blind_retry_baseline
-import json, random
-a = AuditLogger()
-recs = a.get_all_records()
-import decimal
-blind_rng = random.Random(1042)
-from ingestion.generator import generate_transactions
-txns = generate_transactions(500, 42)
-blind = run_blind_retry_baseline(txns, blind_rng)
-m = compute_metrics(recs, blind)
-print(json.dumps({'uplift': m.uplift_vs_blind_retry_pct, 'violations': m.stopping_rule_violations}))
-" > run1_key_metrics.json
+        run: |
+          python -c "
+          from audit.logger import AuditLogger
+          from simulation.metrics import compute_metrics
+          from simulation.baselines import run_blind_retry_baseline, run_naive_multi_retry_baseline
+          from ingestion.generator import generate_transactions
+          import json, random
+
+          txns = generate_transactions(500, 42)
+          blind = run_blind_retry_baseline(txns, random.Random(1042))
+          multi = run_naive_multi_retry_baseline(txns, random.Random(2042))
+
+          a = AuditLogger()
+          recs = a.get_all_records()
+          m = compute_metrics(recs, blind, multi, seed=42)
+          print(json.dumps({'uplift_single': m.uplift_vs_blind_retry_pct, 'uplift_multi': m.uplift_vs_naive_multi_retry_pct, 'violations': m.stopping_rule_violations}))
+          " > run1_key_metrics.json
 
       - name: Clear audit DB
         run: rm -f audit.db
@@ -87,23 +91,27 @@ print(json.dumps({'uplift': m.uplift_vs_blind_retry_pct, 'violations': m.stoppin
       - name: Run simulation (run 2)
         run: python -m simulation.runner 500 42 2>/dev/null
         env:
-          ANTHROPIC_API_KEY: ""
+          GEMINI_API_KEY: ""
+          GOOGLE_GENAI_USE_VERTEXAI: "false"
 
       - name: Export metrics (run 2)
-        run: python -c "
-from audit.logger import AuditLogger
-from simulation.metrics import compute_metrics
-from simulation.baselines import run_blind_retry_baseline
-import json, random
-a = AuditLogger()
-recs = a.get_all_records()
-blind_rng = random.Random(1042)
-from ingestion.generator import generate_transactions
-txns = generate_transactions(500, 42)
-blind = run_blind_retry_baseline(txns, blind_rng)
-m = compute_metrics(recs, blind)
-print(json.dumps({'uplift': m.uplift_vs_blind_retry_pct, 'violations': m.stopping_rule_violations}))
-" > run2_key_metrics.json
+        run: |
+          python -c "
+          from audit.logger import AuditLogger
+          from simulation.metrics import compute_metrics
+          from simulation.baselines import run_blind_retry_baseline, run_naive_multi_retry_baseline
+          from ingestion.generator import generate_transactions
+          import json, random
+
+          txns = generate_transactions(500, 42)
+          blind = run_blind_retry_baseline(txns, random.Random(1042))
+          multi = run_naive_multi_retry_baseline(txns, random.Random(2042))
+
+          a = AuditLogger()
+          recs = a.get_all_records()
+          m = compute_metrics(recs, blind, multi, seed=42)
+          print(json.dumps({'uplift_single': m.uplift_vs_blind_retry_pct, 'uplift_multi': m.uplift_vs_naive_multi_retry_pct, 'violations': m.stopping_rule_violations}))
+          " > run2_key_metrics.json
 
       - name: Compare (must be identical)
         run: diff run1_key_metrics.json run2_key_metrics.json && echo "Reproducibility check passed ✓"

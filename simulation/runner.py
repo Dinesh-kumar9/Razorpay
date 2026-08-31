@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -39,7 +39,6 @@ from schemas.audit import AuditRecord, BatchMetrics
 from schemas.transaction import FailedTransaction
 from simulation.baselines import (
     run_blind_retry_baseline,
-    run_naive_multi_retry_baseline,
     run_never_retry_baseline,
 )
 from simulation.metrics import compute_metrics
@@ -100,7 +99,7 @@ def run_single(
     # Stage 6: Audit log
     record = AuditRecord(
         txn_id=txn.txn_id,
-        timestamp=datetime.now(tz=timezone.utc),
+        timestamp=datetime.now(tz=UTC),
         amount_inr=txn.amount_inr,
         failure_code=txn.failure_code,
         payment_method=txn.payment_method,
@@ -168,10 +167,8 @@ def run_batch(
 
     # Run baselines
     from simulation.baselines import (
-        run_blind_retry_baseline,
         run_naive_multi_retry_constrained,
         run_naive_multi_retry_with_violations,
-        run_never_retry_baseline,
     )
     with console.status("[bold]Running baselines...[/bold]"):
         recovered_blind = run_blind_retry_baseline(transactions, single_retry_rng)
