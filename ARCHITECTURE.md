@@ -9,221 +9,99 @@
 
 > **The LLM never touches money or state — it only touches language.**
 
-Every path through the system is designed so that a failure, hallucination, or
-adversarial output from the LLM cannot mutate state or trigger execution. All
-mutations flow through deterministic guardrails first.
+Every path through the system is architected so that an LLM failure, latency spike, hallucination, or adversarial output cannot mutate state or trigger transaction execution. All action decisions and execution flows pass through deterministic guardrails first.
 
-This property is **verified by code** (see [Audit Trail](#audit-trail) below), not just claimed.
+This invariant is **enforced in code**:
+- In `simulation/runner.py:run_single()`, `llm_layer/client.py` generates an `LLMExplanation` object that is passed *only* to `audit/logger.py` and displayed on `dashboard/`.
+- `execution/executor.py:execute()` takes only `(transaction, policy_decision)` as parameters. It does **not** accept or inspect the `LLMExplanation` object.
+- The outcome model `simulation/outcome_model.py:simulate_recovery_outcome()` operates strictly on `(transaction, policy_decision.final_action)`.
 
 ---
 
-## System Overview
+## System Pipeline Diagram
 
 ```mermaid
 flowchart TD
-    A["🏦 Failed Payment Event\n(FailedTransaction)"] --> B["Risk Model\nXGBoost classifier\nP(recover | features, action)"]
-    B --> C["Policy Engine\nDeterministic guardrails\nFinal authority"]
-    C -->|"Guardrail fires: overrides"| D["PolicyDecision\n(was_overridden=True)"]
+    A["ingestion\n(FailedTransaction generator)"] --> B["risk_model\n(XGBoost uplift classifier)"]
+    B --> C["policy_engine\n(Deterministic guardrails)"]
+    C -->|"Guardrail fires: overrides"| D["policy_decision\n(was_overridden=True)"]
     C -->|"No rule fires: passes through"| D
-    D --> E["LLM Explainer\nGoogle Gemini 2.5 Flash\nAdvisory only"]
-    E -->|"LLMExplanation\n(read-only, never executed)"| F["Simulated Executor\nLogs action intent\nNo real money moved"]
-    F --> G["Outcome Simulation\nBernoulli(P_contextual)\nBatch evaluation"]
-    G --> H["Audit Logger\nSQLite append-only\nImmutable record"]
-    H --> I["HTMX Dashboard\nServer-rendered\nNo client state"]
+    D --> E["llm_layer\n(Google Gemini 2.5 Flash - Advisory)"]
+    E -.->|"LLMExplanation (read-only)"| H["audit\n(Append-only SQLite)"]
+    D --> F["execution\n(Simulated Razorpay API executor)"]
+    F --> G["simulation / metrics\n(Outcome sampling & evaluation)"]
+    G --> H
+    H --> I["api / dashboard\n(FastAPI + HTMX views)"]
 ```
 
 ---
 
-## Stage-by-Stage Pipeline
+## Stage-by-Stage Architecture
 
-### Stage 1 — Transaction Ingestion
+### 1. `ingestion/` — Synthetic Transaction Ingestion
+**File:** [`ingestion/generator.py`](ingestion/generator.py) (see also [`schemas/transaction.py`](schemas/transaction.py))  
+Generates realistic, synthetic failed payment transactions (`FailedTransaction`) with parameterized noise and realistic distributions across failure codes (soft declines, hard stops, technical errors), amounts, payment methods, time of day, and retry histories. Follows synthetic data provenance documented in [`docs/data_provenance.md`](docs/data_provenance.md).
 
-**File:** [`ingestion/generator.py`](ingestion/generator.py)
+### 2. `risk_model/` — Feature Extraction & XGBoost Uplift Model
+**Files:** [`risk_model/features.py`](risk_model/features.py), [`risk_model/model.py`](risk_model/model.py), [`risk_model/recovery_rates.py`](risk_model/recovery_rates.py)  
+Extracts 8 deterministic features from incoming transactions and scores 4 candidate recovery actions using an XGBoost classifier trained on context-adjusted recovery rates. Generates local SHAP feature contributions (`shap_explainer.py`) explaining the statistical drivers behind the recommended action. Model is persisted safely in XGBoost native JSON format.
 
-Synthetic `FailedTransaction` objects are generated from a seeded RNG. The
-`FailedTransaction` schema ([`schemas/transaction.py`](schemas/transaction.py))
-carries all contextual signal: `failure_code`, `amount_inr`, `retry_count_so_far`,
-`time_of_failure`, `customer_contact_count_24h`, `is_subscription`, etc.
+### 3. `policy_engine/` — Deterministic Policy Guardrails (Final Authority)
+**Files:** [`policy_engine/engine.py`](policy_engine/engine.py), [`policy_engine/rules.py`](policy_engine/rules.py)  
+Evaluates mandatory regulatory and operational rules in strict priority order (hard-stop fraud codes under RBI FRM guidelines, card expiration, rate limits, 24h contact limits under DPDP, TRAI DND contact windows, cooldown timers). The policy engine possesses absolute veto power over the ML model recommendation.
 
-The synthetic data design is documented in [`docs/data_provenance.md`](docs/data_provenance.md).
+### 4. `llm_layer/` — Schema-Constrained Advisory Explanations
+**Files:** [`llm_layer/client.py`](llm_layer/client.py), [`llm_layer/fallback.py`](llm_layer/fallback.py), [`llm_layer/prompts.py`](llm_layer/prompts.py)  
+Calls Google Gemini 2.5 Flash via the `google-genai` SDK using native JSON schema enforcement (`response_schema=LLMExplanation`), `thinking_budget=0`, and disabled automatic function calling (AFC) for low-latency (~2.6s) advisory explanations. If the API is unreachable, times out, or fails schema validation, the system falls back instantly to deterministic templates (`fallback.py`). The pipeline never blocks on the LLM.
 
-### Stage 2 — Feature Extraction + Risk Model
+### 5. `execution/` — Simulated Gateway Executor
+**File:** [`execution/executor.py`](execution/executor.py)  
+Dispatches the finalized `policy_decision.final_action` to simulated Razorpay API endpoints (`retry_now`, `retry_delayed`, `nudge_alt_method`, `escalate_to_human`, `stop`). Generates structured API call intents and tracks execution timestamps without moving real funds.
 
-**Files:** [`risk_model/features.py`](risk_model/features.py), [`risk_model/model.py`](risk_model/model.py)
+### 6. `simulation/` & `simulation/metrics.py` — Outcome Modeling & Evaluation
+**Files:** [`simulation/outcome_model.py`](simulation/outcome_model.py), [`simulation/baselines.py`](simulation/baselines.py), [`simulation/metrics.py`](simulation/metrics.py), [`simulation/runner.py`](simulation/runner.py)  
+Evaluates payment recovery outcomes using Bernoulli trials parameterized by context-adjusted recovery probabilities. Computes comparative recovery revenue, uplift against single-attempt and realistic multi-retry baselines, stopping-rule violations, and audit health metrics.
 
-8 numeric features are extracted deterministically from each transaction:
+### 7. `audit/` — Append-Only Immutable Audit Log
+**File:** [`audit/logger.py`](audit/logger.py) (see also [`schemas/audit.py`](schemas/audit.py))  
+Persists the complete lifecycle of every transaction (`FailedTransaction`, `ModelDecision`, `PolicyDecision`, `LLMExplanation`, `ExecutionResult`, `SimulationOutcome`) into an append-only SQLite database. Enforces parameterized queries and monotonic sequential IDs to guarantee auditable non-repudiation.
 
-| Feature | Derivation | Predictive signal |
-|---------|-----------|-------------------|
-| `failure_code_category` | 0=hard_risk, 1=card_issue, 2=soft_decline, 3=system_error | Primary signal |
-| `payment_method_risk` | Float per instrument [0.10, 0.35] | Instrument reliability |
-| `retry_attempt_number` | retry_count_so_far + 1 | Chronicity |
-| `amount_tier` | 5-bucket split at ₹500/2k/10k/50k | High-value is harder to recover |
-| `is_outside_business_hours` | 1 if hour < 8 or hour ≥ 21 | Bank processing window |
-| `contact_proximity_score` | Decay over 120 min since last contact | Recent contact signal |
-| `is_subscription` | 0/1 | Subscription churn risk |
-| `hour_of_day` | 0–23 | Time-of-day pattern |
-
-An `XGBClassifier` scores all 4 candidate actions and returns the one with
-highest `P(recover)`. SHAP values for the winning action are logged.
-
-**Context-aware training labels (added 2026-08-31):** The model is trained on
-labels drawn from `get_contextual_recovery_rate()` — which incorporates
-`amount_inr`, `hour_of_day`, and `prior_failed_attempts_30d` as documented
-modifiers — not just `(failure_code, action)`. This gives XGBoost genuine
-signal across all 8 features. See [`risk_model/recovery_rates.py`](risk_model/recovery_rates.py)
-for the modifier documentation and source citations.
-
-### Stage 3 — Policy Engine (Guardrails)
-
-**Files:** [`policy_engine/engine.py`](policy_engine/engine.py), [`policy_engine/rules.py`](policy_engine/rules.py)
-
-The engine evaluates 6 rules in strict priority order. **First rule that fires wins.**
-
-| Rule ID | Trigger | Override to | Regulation |
-|---------|---------|-------------|------------|
-| `HARD_STOP_001` | Failure code in `{FRAUD_FLAG, CARD_BLOCKED, STOLEN_CARD, KYC_HOLD}` | `ESCALATE_TO_HUMAN` | RBI FRM, DPDP |
-| `HARD_STOP_002` | Failure code in `{CARD_EXPIRED, INVALID_CARD}` | `NUDGE_ALT_METHOD` | Merchant policy |
-| `RATE_LIMIT_001` | retry_count_so_far ≥ 3 | `STOP` | RBI retry limits |
-| `RATE_LIMIT_002` | customer_contact_count_24h ≥ 3 | `STOP` | TRAI DND |
-| `COOLDOWN_001` | Last contact < 30 min ago and action requires contact | `RETRY_DELAYED` | Merchant policy |
-| `WINDOW_001` | hour < 8 or hour ≥ 21 and action requires contact | `RETRY_DELAYED` | Merchant policy |
-
-The engine's override rate (73.8% in baseline simulation) is high because
-~30% of transactions have hard-stop codes and ~25% have hit retry or contact limits.
-**Every override is deterministic and regulation-driven**, never probabilistic.
-
-### Stage 4 — LLM Explainer
-
-**Files:** [`llm_layer/client.py`](llm_layer/client.py), [`llm_layer/fallback.py`](llm_layer/fallback.py)
-
-Google Gemini 2.5 Flash (`google-genai` SDK) generates a human-readable explanation for the policy decision.
-The explanation is **advisory only** — it is written to the audit log and shown in the
-dashboard, but it is never read by the executor or metrics layer.
-
-**Failure handling:** If the LLM call fails or returns an invalid schema, the system
-falls back to a deterministic template (`fallback.py`). The `llm_fallback_to_template_count`
-metric is reported honestly, even when non-zero.
-
-**Single provider architecture:** See [`docs/adr/0005-llm-fallback-design.md`](docs/adr/0005-llm-fallback-design.md).
-
-### Stage 5 — Simulated Executor
-
-**File:** [`execution/executor.py`](execution/executor.py)
-
-Logs the action intent (API descriptor). No real API calls are made. No money moves.
-This is the correct scope for a simulation: the executor is a record of what *would*
-happen in production, not what actually happens.
-
-### Stage 6 — Outcome Simulation
-
-**File:** [`simulation/outcome_model.py`](simulation/outcome_model.py)
-
-Samples a Bernoulli recovery outcome using `get_contextual_recovery_rate()` — the
-context-adjusted probability from [`risk_model/recovery_rates.py`](risk_model/recovery_rates.py).
-The same seeded RNG is used for each run, ensuring reproducibility.
-
-### Stage 7 — Audit Logger
-
-**File:** [`audit/logger.py`](audit/logger.py)
-
-Append-only SQLite write. No UPDATE or DELETE is ever executed. Every transaction
-is logged as a JSON blob with indexed fields for dashboard queries. The auto-increment
-ID makes deletions detectable (gap in sequence).
-
-SQL queries use parameterized statements only — no f-string interpolation into SQL
-(Bandit B608 clean).
-
-### Stage 8 — HTMX Dashboard
-
-**Files:** [`api/`](api/), [`dashboard/`](dashboard/)
-
-FastAPI serves Jinja2 templates with HTMX for partial updates. No client-side state.
-Every number on the dashboard is computed from the audit DB at request time.
+### 8. `api/` & `dashboard/` — Server-Rendered Analytics Dashboard
+**Files:** [`api/main.py`](api/main.py), [`api/routers/`](api/routers/), [`dashboard/templates/`](dashboard/templates/)  
+Provides FastAPI REST endpoints (`/api/batch/metrics`, `/api/simulate/single`) and server-rendered HTMX dashboard views (`/`, `/transactions`, `/transactions/{id}`) visualizing real-time recovery metrics, dual baseline uplifts, SHAP feature importance, and live LLM explanations.
 
 ---
 
-## Baseline Comparison Strategy
-
-Two baselines are compared against the agent:
-
-| Baseline | Description | Uplift label |
-|---------|-------------|--------------|
-| **Single-attempt** | Retry every transaction immediately, once | Secondary (disclosed) |
-| **Realistic multi-retry** | 3 attempts: immediate, +24h, +72h — no guardrails | **Headline metric** |
-| Never retry | Do nothing | Floor |
-
-The "realistic multi-retry" baseline simulates what an unsophisticated merchant cron
-job does. **The agent must beat this to claim genuine value.** See [`simulation/baselines.py`](simulation/baselines.py).
-
----
-
-## Audit Trail
-
-### "LLM never touches money" — verification path
+## Core Invariant Verification
 
 ```
 simulation/runner.py:run_single()
-  ├── model.predict(txn)          → ModelDecision (no side effects)
-  ├── engine.evaluate(txn, md)    → PolicyDecision (deterministic, authoritative)
-  ├── explainer.explain(pd, ...)  → LLMExplanation ──┐
-  ├── executor.execute(txn, pd)   ← never reads LLMExplanation  ┘
-  ├── simulate_outcome(txn, pd.final_action, rng)  ← never reads LLMExplanation
-  └── AuditLogger.log(record)    ← LLMExplanation stored as text blob only
+  │
+  ├── 1. model.predict(txn)            → ModelDecision
+  ├── 2. engine.evaluate(txn, md)      → PolicyDecision [AUTHORITATIVE ACTION]
+  │
+  ├── 3. explainer.explain(pd, ...)    → LLMExplanation [ADVISORY ONLY]
+  │         └─► written ONLY to audit/logger.py & displayed on dashboard
+  │
+  ├── 4. executor.execute(txn, pd)     ← takes (txn, pd); NEVER receives LLMExplanation
+  ├── 5. simulate_outcome(txn, action) ← takes pd.final_action; NEVER receives LLMExplanation
+  └── 6. audit_logger.log(record)      ← stores immutable snapshot
 ```
 
-`explainer.explain()` is called after `policy_decision` is final. The `LLMExplanation`
-object is used in exactly one downstream call: `AuditRecord(explanation=explanation)`.
-`AuditRecord` is written to SQLite and returned to the API as JSON. It is never
-passed to `executor.execute()` or `simulate_outcome()`.
-
-### Stopping rules — verification path
-
-`check_HARD_STOP_001` (`policy_engine/rules.py`) fires before any retry or nudge
-action can be executed. The rule returns `ESCALATE_TO_HUMAN` unconditionally for
-`{FRAUD_FLAG, CARD_BLOCKED, STOLEN_CARD, KYC_HOLD}`. The engine respects this
-return value — `engine.evaluate()` returns the first rule result that is not `None`.
-
-Test coverage: `tests/test_policy_engine.py` — 43 test cases, including:
-- `test_hard_stop_001_*`: verifies each hard-stop code triggers escalation
-- `test_rate_limit_001_*`: verifies retry count gate
-- `test_override_preserves_model_recommendation`: verifies `was_overridden=True` is set
+**Audit Trail:**
+1. Code inspection of [`execution/executor.py`](execution/executor.py#L45) confirms `execute(txn, policy_decision)` has no parameter or reference to `LLMExplanation`.
+2. Code inspection of [`simulation/runner.py`](simulation/runner.py#L85-L115) confirms `explanation` is only assigned to `AuditRecord.explanation` for post-hoc inspection.
+3. Code inspection of [`policy_engine/engine.py`](policy_engine/engine.py) confirms decisions are 100% deterministic code rules.
 
 ---
 
-## Technology Choices
+## Technology Stack
 
-| Concern | Choice | Rationale |
-|---------|--------|-----------|
-| LLM | Google Gemini 2.5 Flash (`google-genai`) | ADR 0005: native schema-constrained output, single provider |
-| ML | XGBoost | Interpretable via SHAP; fast; no GPU required |
-| Guardrails | Plain Python | ADR 0007: legible, auditable, no framework indirection |
-| Dashboard | HTMX + FastAPI | ADR 0006: server-rendered, no client state to reason about |
-| Audit log | SQLite | Appropriate for ≤100k records; append-only enforced by code |
-| Data | Synthetic | ADR 0003: no public dataset has the right label structure |
-
-See [`docs/adr/`](docs/adr/) for the full decision record.
-
----
-
-## Reproducing the Simulation
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set API key
-export GEMINI_API_KEY="AQ.Ab8..."
-
-# Run the simulation (5,000 transactions, seed=42)
-python -m simulation.runner 5000 42
-
-# Start the dashboard
-uvicorn api.main:app --host 0.0.0.0 --port 8000
-
-# Run tests
-pytest tests/ -v --tb=short
-```
-
-The same seed always produces the same metrics. The README metrics table was generated
-with `seed=42` and can be reproduced on any machine.
+| Component | Choice | Rationale |
+|-----------|--------|-----------|
+| **LLM Explainer** | Google Gemini 2.5 Flash (`google-genai`) | Native schema constraints (`response_schema`), sub-3s latency, single-provider architecture |
+| **Risk / Uplift Model** | XGBoost + SHAP | High interpretability, non-linear feature interactions, fast CPU inference |
+| **Policy Engine** | Pure Python Rules | Deterministic regulatory compliance (RBI FRM, DPDP, TRAI DND), zero framework risk |
+| **Audit Storage** | SQLite (Append-only) | Immutable structured audit log with parameterized queries |
+| **API & UI** | FastAPI + Jinja2 + HTMX | Server-rendered, minimal client state, real-time live dashboard |
+| **Data Engine** | NumPy + Pandas + PyArrow | Reproducible synthetic data generation with verified distributions |
