@@ -79,25 +79,47 @@ class TestFastAPIEndpoints:
         assert data["status"] == "ok"
 
     def test_batch_metrics_endpoint(self):
-        """Endpoint returns 200+BatchMetrics when audit DB has records.
+        """Endpoint returns 200+BatchMetrics when audit DB has records."""
+        from schemas.audit import AuditRecord, SimulatedOutcome
+        from schemas.decision import RecoveryAction
+        from schemas.explanation import LLMExplanation
+        from schemas.transaction import FailureCode, PaymentMethod
 
-        The audit DB is empty in CI (no simulation pre-run), so we mock
-        the audit logger to return a minimal synthetic run_batch result.
-        """
-        from simulation.runner import run_batch
-        import tempfile, pathlib
-        with tempfile.TemporaryDirectory() as tmp:
-            db_path = pathlib.Path(tmp) / "test_audit.db"
-            run_batch(n=5, seed=42, db_path=db_path)
-            mock_logger = MagicMock()
-            from audit.logger import AuditLogger
-            real_logger = AuditLogger(db_path=str(db_path))
-            records = real_logger.get_all_records()
-            mock_logger.count.return_value = len(records)
-            mock_logger.get_all_records.return_value = records
-            with patch("api.routers.batch.get_audit_logger", return_value=mock_logger):
-                client = TestClient(app)
-                response = client.get("/api/batch/metrics")
+        record = AuditRecord(
+            txn_id="TXN-TEST-001",
+            timestamp=datetime.now(tz=UTC),
+            amount_inr=Decimal("2500"),
+            failure_code=FailureCode.INSUFFICIENT_FUNDS,
+            payment_method=PaymentMethod.UPI,
+            customer_id="cust_001",
+            merchant_id="merch_001",
+            model_action=RecoveryAction.RETRY_DELAYED,
+            model_confidence=0.85,
+            final_action=RecoveryAction.RETRY_DELAYED,
+            was_overridden=False,
+            rule_id=None,
+            rule_description=None,
+            explanation=LLMExplanation(
+                rationale="Delayed retry recommended for insufficient funds.",
+                confidence_caveat="Account balance timing is uncertain.",
+                fallback_if_wrong="If retry fails, nudge customer for alternative payment method.",
+                customer_nudge_text=None,
+                internal_notes="Low risk retry",
+                source="template",
+            ),
+            simulated_outcome=SimulatedOutcome(
+                recovered=True,
+                amount_recovered_inr=Decimal("2500"),
+                recovery_probability_used=0.55,
+            ),
+            amount_recovered_inr=Decimal("2500"),
+        )
+        mock_logger = MagicMock()
+        mock_logger.count.return_value = 1
+        mock_logger.get_all_records.return_value = [record]
+        with patch("api.routers.batch.get_audit_logger", return_value=mock_logger):
+            client = TestClient(app)
+            response = client.get("/api/batch/metrics")
         assert response.status_code == 200
         data = response.json()
         assert "total_transactions" in data
