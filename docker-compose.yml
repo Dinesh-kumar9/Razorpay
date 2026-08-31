@@ -1,0 +1,33 @@
+services:
+  # ── Batch simulation ────────────────────────────────────────────────────────
+  # Run this first to populate the audit database.
+  # Usage: docker compose run --rm simulation
+  simulation:
+    build: .
+    command: python -m simulation.runner
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - PYTHONPATH=/app
+    volumes:
+      - ./data:/app/data
+      - ./audit.db:/app/audit.db
+    profiles: [simulation]
+
+  # ── API + Dashboard ─────────────────────────────────────────────────────────
+  # Starts the FastAPI server with the HTMX dashboard.
+  # Usage: docker compose up api
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - PYTHONPATH=/app
+    volumes:
+      - ./data:/app/data
+      - ./audit.db:/app/audit.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

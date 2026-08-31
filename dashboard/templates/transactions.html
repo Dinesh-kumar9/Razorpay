@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Transactions{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Transaction Audit Log</h1>
+  <p class="page-subtitle">Every decision, logged and replayable</p>
+</div>
+
+<!-- ── Filter bar ─────────────────────────────────────────────────────── -->
+<div class="filter-bar">
+  <button id="filter-all"
+    class="filter-btn filter-btn--active"
+    hx-get="/htmx/transactions?filter=all&page=1"
+    hx-target="#txn-table-container"
+    hx-swap="innerHTML"
+    hx-on::after-request="setActiveFilter(this)">
+    All
+  </button>
+  <button id="filter-overridden"
+    class="filter-btn"
+    hx-get="/htmx/transactions?filter=overridden&page=1"
+    hx-target="#txn-table-container"
+    hx-swap="innerHTML"
+    hx-on::after-request="setActiveFilter(this)">
+    ⚡ Overridden
+  </button>
+  <button id="filter-recovered"
+    class="filter-btn"
+    hx-get="/htmx/transactions?filter=recovered&page=1"
+    hx-target="#txn-table-container"
+    hx-swap="innerHTML"
+    hx-on::after-request="setActiveFilter(this)">
+    ✅ Recovered
+  </button>
+  <button id="filter-escalated"
+    class="filter-btn"
+    hx-get="/htmx/transactions?filter=escalated&page=1"
+    hx-target="#txn-table-container"
+    hx-swap="innerHTML"
+    hx-on::after-request="setActiveFilter(this)">
+    🚨 Escalated
+  </button>
+  <button id="filter-stopped"
+    class="filter-btn"
+    hx-get="/htmx/transactions?filter=stopped&page=1"
+    hx-target="#txn-table-container"
+    hx-swap="innerHTML"
+    hx-on::after-request="setActiveFilter(this)">
+    🛑 Stopped
+  </button>
+</div>
+
+<!-- ── Transaction table (HTMX swap target) ─────────────────────────── -->
+<div id="txn-table-container"
+  hx-get="/htmx/transactions?filter=all&page=1"
+  hx-trigger="load"
+  hx-swap="innerHTML">
+  <div class="loading-state">Loading transactions...</div>
+</div>
+
+<script>
+function setActiveFilter(el) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('filter-btn--active'));
+  el.classList.add('filter-btn--active');
+}
+</script>
+{% endblock %}

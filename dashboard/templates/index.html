@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Revenue Recovery Dashboard</h1>
+  <p class="page-subtitle">Batch simulation results · <span class="mono">{{ "{:,}".format(record_count | default(0) | int) }}</span> transactions processed</p>
+</div>
+
+{% if metrics %}
+<!-- ── Hero metric cards ─────────────────────────────────────────────── -->
+<div class="metrics-grid">
+  <div class="metric-card metric-card--primary">
+    <div class="metric-label">Total at Risk</div>
+    <div class="metric-value">₹{{ "{:,.0f}".format(metrics.total_at_risk_inr | float) }}</div>
+    <div class="metric-sub">{{ metrics.total_transactions | int }} failed transactions</div>
+  </div>
+
+  <div class="metric-card metric-card--success">
+    <div class="metric-label">Agent Recovered</div>
+    <div class="metric-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</div>
+    <div class="metric-sub">{{ "%.1f" | format(metrics.recovery_rate_agent_pct | float) }}% recovery rate</div>
+  </div>
+
+  <div class="metric-card metric-card--uplift">
+    <div class="metric-label">Uplift vs Realistic Multi-Retry <span style="font-size:0.7em;opacity:0.7">(headline)</span></div>
+    <div class="metric-value">+{{ "%.1f" | format(metrics.uplift_vs_naive_multi_retry_pct | float) }}%</div>
+    <div class="metric-sub">
+      {% if metrics.uplift_vs_naive_multi_retry_pct | float >= 20 %}
+        <span class="badge badge--pass">✓ Target met (≥20%)</span>
+      {% else %}
+        <span class="badge badge--fail">✗ Below target</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="metric-card metric-card--info">
+    <div class="metric-label">Uplift vs Single-Attempt <span style="font-size:0.7em;opacity:0.7">(secondary)</span></div>
+    <div class="metric-value">+{{ "%.1f" | format(metrics.uplift_vs_blind_retry_pct | float) }}%</div>
+    <div class="metric-sub">vs immediate-retry only baseline</div>
+  </div>
+</div>
+
+<!-- ── Baseline comparison bar chart ────────────────────────────────── -->
+<div class="section-card">
+  <h2 class="section-title">Baseline Comparison</h2>
+  <div class="bar-chart">
+    {% set max_val = [metrics.recovered_inr_agent | float, metrics.recovered_inr_naive_multi_retry | float, metrics.recovered_inr_blind_retry | float, 1] | max %}
+
+    <div class="bar-row">
+      <div class="bar-label">Our Agent</div>
+      <div class="bar-track">
+        <div class="bar bar--agent" style="width: {{ ((metrics.recovered_inr_agent | float) / max_val * 100) | int }}%"></div>
+      </div>
+      <div class="bar-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label">Realistic Multi-Retry <span style="font-size:0.75em;opacity:0.7">(3 attempts)</span></div>
+      <div class="bar-track">
+        <div class="bar bar--multi-retry" style="width: {{ ((metrics.recovered_inr_naive_multi_retry | float) / max_val * 100) | int }}%"></div>
+      </div>
+      <div class="bar-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_naive_multi_retry | float) }}</div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label">Single-Retry <span style="font-size:0.75em;opacity:0.7">(immediate only)</span></div>
+      <div class="bar-track">
+        <div class="bar bar--baseline" style="width: {{ ((metrics.recovered_inr_blind_retry | float) / max_val * 100) | int }}%"></div>
+      </div>
+      <div class="bar-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_blind_retry | float) }}</div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label">Never Retry</div>
+      <div class="bar-track">
+        <div class="bar bar--zero" style="width: 2%"></div>
+      </div>
+      <div class="bar-value">₹0</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Compliance constraints ────────────────────────────────────────── -->
+<div class="section-card">
+  <h2 class="section-title">Compliance Constraints</h2>
+  <div class="constraints-grid">
+
+    <div class="constraint-item {% if metrics.stopping_rule_violations | int == 0 %}constraint--pass{% else %}constraint--fail{% endif %}">
+      <div class="constraint-icon">{% if metrics.stopping_rule_violations | int == 0 %}✅{% else %}❌{% endif %}</div>
+      <div class="constraint-body">
+        <div class="constraint-name">Stopping-rule violations</div>
+        <div class="constraint-value">{{ metrics.stopping_rule_violations | int }}</div>
+        <div class="constraint-target">Must be exactly 0</div>
+      </div>
+    </div>
+
+    <div class="constraint-item {% if metrics.decisions_with_explanation_pct | float >= 100 %}constraint--pass{% else %}constraint--fail{% endif %}">
+      <div class="constraint-icon">{% if metrics.decisions_with_explanation_pct | float >= 100 %}✅{% else %}❌{% endif %}</div>
+      <div class="constraint-body">
+        <div class="constraint-name">Explanation coverage</div>
+        <div class="constraint-value">{{ "%.1f" | format(metrics.decisions_with_explanation_pct | float) }}%</div>
+        <div class="constraint-target">Must be 100%</div>
+      </div>
+    </div>
+
+    <div class="constraint-item constraint--info">
+      <div class="constraint-icon">⚠️</div>
+      <div class="constraint-body">
+        <div class="constraint-name">False escalations</div>
+        <div class="constraint-value">{{ metrics.false_escalation_count | int }} ({{ "%.1f" | format(metrics.false_escalation_rate_pct | float) }}%)</div>
+        <div class="constraint-target">Reported honestly</div>
+      </div>
+    </div>
+
+    <div class="constraint-item constraint--info">
+      <div class="constraint-icon">🔄</div>
+      <div class="constraint-body">
+        <div class="constraint-name">Policy overrides</div>
+        <div class="constraint-value">{{ metrics.override_count | int }} ({{ "%.1f" | format(metrics.override_rate_pct | float) }}%)</div>
+        <div class="constraint-target">Guardrail activity</div>
+      </div>
+    </div>
+
+    <div class="constraint-item constraint--info">
+      <div class="constraint-icon">🤖</div>
+      <div class="constraint-body">
+        <div class="constraint-name">LLM → Template fallback</div>
+        <div class="constraint-value">{{ metrics.llm_fallback_to_template_count | int }} ({{ "%.1f" | format(metrics.llm_fallback_rate_pct | float) }}%)</div>
+        <div class="constraint-target">Pipeline never blocked</div>
+      </div>
+    </div>
+
+    <div class="constraint-item constraint--info">
+      <div class="constraint-icon">🎲</div>
+      <div class="constraint-body">
+        <div class="constraint-name">Random seed</div>
+        <div class="constraint-value mono">{{ metrics.random_seed | int }}</div>
+        <div class="constraint-target">Reproducible</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Architecture principle callout ───────────────────────────────── -->
+<div class="principle-banner">
+  <span class="principle-icon">◈</span>
+  <span class="principle-text">
+    <strong>Core design principle:</strong> The LLM never touches money or state.
+    It only touches language. Every recovery action is decided by the
+    deterministic policy engine, not by Claude.
+  </span>
+  <a href="/transactions" class="btn btn--outline">View All Transactions →</a>
+</div>
+
+{% else %}
+<!-- ── No data state ──────────────────────────────────────────────────── -->
+<div class="empty-state">
+  <div class="empty-icon">◈</div>
+  <h2>No simulation data yet</h2>
+  <p>Run the batch simulation to populate the dashboard.</p>
+  <code class="empty-cmd">docker compose run simulation</code>
+  <p class="empty-sub">or</p>
+  <code class="empty-cmd">python -m simulation.runner</code>
+</div>
+{% endif %}
+{% endblock %}

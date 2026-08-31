@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "project-meridian"
+version = "0.1.0"
+description = "AI Revenue Recovery Agent — Razorpay AI Buildathon Track 3"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "dashboard*", "docs*", "data*"]
+
+# ── Ruff (linting) ─────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "N", "B", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "schemas", "ingestion", "risk_model", "policy_engine",
+    "llm_layer", "execution", "audit", "simulation", "api",
+]
+
+# ── Mypy (type checking) ───────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+exclude = ["tests/", "dashboard/", "docs/", "data/"]
+
+[[tool.mypy.overrides]]
+module = ["xgboost.*", "shap.*", "sklearn.*", "numpy.*", "pandas.*"]
+ignore_missing_imports = true
+ignore_errors = true
+
+# ── Pytest ─────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-fail-under=75",
+    "-v",
+]
+asyncio_mode = "auto"
+
+# ── Coverage ───────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "dashboard/*",
+    "docs/*",
+    "data/*",
+    "htmlcov/*",
+    "setup.py",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@(abc\\.)?abstractmethod",
+]
+
+# ── Bandit (security) ──────────────────────────────────────────────────────────
+[tool.bandit]
+exclude_dirs = ["tests", "dashboard"]
+skips = ["B101"]   # assert statements are fine in production for invariant checks

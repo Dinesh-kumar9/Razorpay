@@ -1,0 +1,89 @@
+<div class="table-meta">
+  Showing {{ rows | length }} of {{ total }} transactions
+  {% if total_pages > 1 %} · Page {{ page }} of {{ total_pages }}{% endif %}
+</div>
+
+<div class="table-wrapper">
+  <table class="txn-table" id="transactions-table">
+    <thead>
+      <tr>
+        <th>Txn ID</th>
+        <th>Amount</th>
+        <th>Failure Code</th>
+        <th>Method</th>
+        <th>Model Said</th>
+        <th>Final Action</th>
+        <th>Override?</th>
+        <th>Recovered?</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr class="txn-row {% if row.was_overridden %}txn-row--overridden{% endif %}" id="row-{{ row.txn_id }}">
+        <td class="mono text-sm">{{ row.txn_id }}</td>
+        <td>₹{{ "{:,.0f}".format(row.amount_inr | float) }}</td>
+        <td>
+          <span class="code-pill code-pill--{{ 'danger' if row.failure_code in ['card_blocked','fraud_flag','kyc_hold','stolen_card'] else 'warning' if row.failure_code in ['card_expired','invalid_card','card_limit_exceeded'] else 'info' }}">
+            {{ row.failure_code }}
+          </span>
+        </td>
+        <td>{{ row.payment_method }}</td>
+        <td>
+          <span class="action-badge action-badge--{{ row.model_action | replace('_','-') }}">
+            {{ row.model_action }}
+          </span>
+        </td>
+        <td>
+          <span class="action-badge action-badge--{{ row.final_action | replace('_','-') }}">
+            {{ row.final_action }}
+          </span>
+        </td>
+        <td class="text-center">
+          {% if row.was_overridden %}
+            <span class="override-badge" title="{{ row.guardrail_rule_id }}">⚡ {{ row.guardrail_rule_id }}</span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td class="text-center">
+          {% if row.recovered %}
+            <span class="recovered-yes">✅</span>
+          {% else %}
+            <span class="recovered-no">❌</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="/transaction/{{ row.txn_id }}" class="detail-link">View →</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="9" class="empty-table-msg">No transactions match this filter.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}
+    <button class="page-btn"
+      hx-get="/htmx/transactions?filter={{ filter }}&page={{ page - 1 }}"
+      hx-target="#txn-table-container"
+      hx-swap="innerHTML">
+      ← Prev
+    </button>
+  {% endif %}
+  <span class="page-info">{{ page }} / {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <button class="page-btn"
+      hx-get="/htmx/transactions?filter={{ filter }}&page={{ page + 1 }}"
+      hx-target="#txn-table-container"
+      hx-swap="innerHTML">
+      Next →
+    </button>
+  {% endif %}
+</div>
+{% endif %}

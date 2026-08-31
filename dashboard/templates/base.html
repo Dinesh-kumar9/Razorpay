@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Project Meridian{% endblock %} — AI Revenue Recovery</title>
+  <meta name="description" content="Bounded AI agent for failed-payment recovery. Recovers revenue intelligently with full audit trail and compliance guardrails." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">
+      <span class="brand-icon">◈</span>
+      <span class="brand-name">Project <strong>Meridian</strong></span>
+      <span class="brand-tag">AI Revenue Recovery</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Dashboard</a></li>
+      <li><a href="/transactions" class="nav-link {% if request.url.path == '/transactions' %}active{% endif %}">Transactions</a></li>
+      <li><a href="/docs" class="nav-link" target="_blank">API Docs ↗</a></li>
+    </ul>
+  </nav>
+
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span>Razorpay AI Buildathon · Track 3 · The LLM never touches money or state — it only touches language.</span>
+  </footer>
+</body>
+</html>
