@@ -21,7 +21,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=False)  # Shell env vars take precedence over .env (allows ANTHROPIC_API_KEY="" override)
 
 from rich import box
 from rich.console import Console

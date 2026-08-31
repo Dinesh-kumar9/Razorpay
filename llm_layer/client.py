@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # Claude Haiku 4.5 — fast, cheap, sufficient for structured JSON explanations.
 CLAUDE_MODEL_ANTHROPIC = "claude-haiku-4-5"
 CLAUDE_MODEL_OPENROUTER = "anthropic/claude-haiku-4.5"
-MAX_TOKENS = 300  # LLMExplanation fields total <=700 chars; 300 tokens is ample
+MAX_TOKENS = 200  # LLMExplanation fields total <=700 chars; 200 tokens is ample
 TIMEOUT_SECONDS = 12.0  # Never block the pipeline longer than this
 
 
