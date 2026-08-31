@@ -91,3 +91,15 @@ class TestModelTrainingAndInference:
         assert 0.0 <= decision.confidence <= 1.0
         assert len(decision.shap_top_features) >= 1
         assert "retry_now" in decision.p_recover_by_action
+
+
+class TestShapAblation:
+    def test_run_shap_ablation_output(self):
+        from risk_model.shap_ablation import run_shap_ablation
+        result = run_shap_ablation(n_background=20, seed=42, verbose=False)
+        assert "ranked_features" in result
+        assert len(result["ranked_features"]) > 0
+        assert "top_feature" in result
+        assert 0.0 <= result["top_pct"] <= 100.0
+        assert 0.0 <= result["non_failure_code_pct"] <= 100.0
+
