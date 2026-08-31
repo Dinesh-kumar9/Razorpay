@@ -7,6 +7,7 @@ from __future__ import annotations
 import random
 from datetime import UTC, datetime
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -78,8 +79,25 @@ class TestFastAPIEndpoints:
         assert data["status"] == "ok"
 
     def test_batch_metrics_endpoint(self):
-        client = TestClient(app)
-        response = client.get("/api/batch/metrics")
+        """Endpoint returns 200+BatchMetrics when audit DB has records.
+
+        The audit DB is empty in CI (no simulation pre-run), so we mock
+        the audit logger to return a minimal synthetic run_batch result.
+        """
+        from simulation.runner import run_batch
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = pathlib.Path(tmp) / "test_audit.db"
+            run_batch(n=5, seed=42, db_path=db_path)
+            mock_logger = MagicMock()
+            from audit.logger import AuditLogger
+            real_logger = AuditLogger(db_path=str(db_path))
+            records = real_logger.get_all_records()
+            mock_logger.count.return_value = len(records)
+            mock_logger.get_all_records.return_value = records
+            with patch("api.routers.batch.get_audit_logger", return_value=mock_logger):
+                client = TestClient(app)
+                response = client.get("/api/batch/metrics")
         assert response.status_code == 200
         data = response.json()
         assert "total_transactions" in data
