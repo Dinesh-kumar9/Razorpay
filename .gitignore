@@ -60,3 +60,8 @@ Thumbs.db
 
 # Docker
 *.log
+
+# Backup files
+.env.bak
+*.db-journal
+
