@@ -136,12 +136,13 @@ class TestFastAPIEndpoints:
 
     def test_batch_breakdown_endpoint_populated(self):
         """GET /api/batch/breakdown → 200 with action + failure_code breakdown."""
-        from decimal import Decimal
-        from schemas.audit import AuditRecord, SimulatedOutcome
-        from schemas.explanation import LLMExplanation
-        from schemas.decision import RecoveryAction
-        from schemas.transaction import FailureCode, PaymentMethod
         from datetime import UTC, datetime
+        from decimal import Decimal
+
+        from schemas.audit import AuditRecord, SimulatedOutcome
+        from schemas.decision import RecoveryAction
+        from schemas.explanation import LLMExplanation
+        from schemas.transaction import FailureCode, PaymentMethod
 
         record = AuditRecord(
             txn_id="TXN-BREAKDOWN-001",
