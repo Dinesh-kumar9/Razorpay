@@ -4,36 +4,33 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">Revenue Recovery Dashboard</h1>
-  <p class="page-subtitle">Batch simulation results · <span class="mono">{{ "{:,}".format(record_count | default(0) | int) }}</span> transactions processed</p>
+  <p class="page-subtitle">Batch simulation results &middot; <span class="mono">{{ "{:,}".format(record_count | default(0) | int) }}</span> transactions processed</p>
 </div>
 
 {% if metrics %}
-<!-- ── Hero metric cards ─────────────────────────────────────────────── -->
+<!-- == Hero metric cards == -->
 <div class="metrics-grid">
   <div class="metric-card metric-card--primary">
     <div class="metric-label">Total at Risk</div>
-    <div class="metric-value">₹{{ "{:,.0f}".format(metrics.total_at_risk_inr | float) }}</div>
+    <div class="metric-value">&#x20B9;{{ "{:,.0f}".format(metrics.total_at_risk_inr | float) }}</div>
     <div class="metric-sub">{{ metrics.total_transactions | int }} failed transactions</div>
   </div>
-
   <div class="metric-card metric-card--success">
     <div class="metric-label">Agent Recovered</div>
-    <div class="metric-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</div>
+    <div class="metric-value">&#x20B9;{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</div>
     <div class="metric-sub">{{ "%.1f" | format(metrics.recovery_rate_agent_pct | float) }}% recovery rate</div>
   </div>
-
   <div class="metric-card metric-card--uplift">
     <div class="metric-label">Uplift vs Realistic Multi-Retry <span style="font-size:0.7em;opacity:0.7">(headline)</span></div>
     <div class="metric-value">+{{ "%.1f" | format(metrics.uplift_vs_naive_multi_retry_pct | float) }}%</div>
     <div class="metric-sub">
       {% if metrics.uplift_vs_naive_multi_retry_pct | float >= 20 %}
-        <span class="badge badge--pass">✓ Target met (≥20%)</span>
+        <span class="badge badge--pass">&#x2713; Target met (&ge;20%)</span>
       {% else %}
-        <span class="badge badge--fail">✗ Below target</span>
+        <span class="badge badge--fail">&#x2717; Below target</span>
       {% endif %}
     </div>
   </div>
-
   <div class="metric-card metric-card--info">
     <div class="metric-label">Uplift vs Single-Attempt <span style="font-size:0.7em;opacity:0.7">(secondary)</span></div>
     <div class="metric-value">+{{ "%.1f" | format(metrics.uplift_vs_blind_retry_pct | float) }}%</div>
@@ -41,123 +38,245 @@
   </div>
 </div>
 
-<!-- ── Baseline comparison bar chart ────────────────────────────────── -->
-<div class="section-card">
-  <h2 class="section-title">Baseline Comparison</h2>
-  <div class="bar-chart">
-    {% set max_val = [metrics.recovered_inr_agent | float, metrics.recovered_inr_naive_multi_retry | float, metrics.recovered_inr_blind_retry | float, 1] | max %}
-
-    <div class="bar-row">
-      <div class="bar-label">Our Agent</div>
-      <div class="bar-track">
-        <div class="bar bar--agent" style="width: {{ ((metrics.recovered_inr_agent | float) / max_val * 100) | int }}%"></div>
-      </div>
-      <div class="bar-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</div>
-    </div>
-
-    <div class="bar-row">
-      <div class="bar-label">Realistic Multi-Retry <span style="font-size:0.75em;opacity:0.7">(3 attempts)</span></div>
-      <div class="bar-track">
-        <div class="bar bar--multi-retry" style="width: {{ ((metrics.recovered_inr_naive_multi_retry | float) / max_val * 100) | int }}%"></div>
-      </div>
-      <div class="bar-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_naive_multi_retry | float) }}</div>
-    </div>
-
-    <div class="bar-row">
-      <div class="bar-label">Single-Retry <span style="font-size:0.75em;opacity:0.7">(immediate only)</span></div>
-      <div class="bar-track">
-        <div class="bar bar--baseline" style="width: {{ ((metrics.recovered_inr_blind_retry | float) / max_val * 100) | int }}%"></div>
-      </div>
-      <div class="bar-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_blind_retry | float) }}</div>
-    </div>
-
-    <div class="bar-row">
-      <div class="bar-label">Never Retry</div>
-      <div class="bar-track">
-        <div class="bar bar--zero" style="width: 2%"></div>
-      </div>
-      <div class="bar-value">₹0</div>
-    </div>
+<!-- == Charts Row == -->
+<div class="charts-row">
+  <div class="section-card chart-card">
+    <h2 class="section-title">Baseline Comparison</h2>
+    <p class="chart-subtitle">Recovered revenue &#x20B9; &mdash; animated on load</p>
+    <div class="chart-container"><canvas id="baselineChart" height="200"></canvas></div>
+  </div>
+  <div class="section-card chart-card">
+    <h2 class="section-title">Action Distribution</h2>
+    <p class="chart-subtitle">How the agent split {{ metrics.total_transactions | int }} transactions</p>
+    <div class="chart-container chart-container--donut"><canvas id="actionDonut" height="200"></canvas></div>
+    <div class="donut-legend" id="donut-legend"></div>
   </div>
 </div>
 
-<!-- ── Compliance constraints ────────────────────────────────────────── -->
+<!-- == At-Scale Projection == -->
+{% set scale_factor = 10000000 / (metrics.total_transactions | float) %}
+{% set agent_monthly = (metrics.recovered_inr_agent | float) * scale_factor %}
+{% set baseline_monthly = (metrics.recovered_inr_blind_retry | float) * scale_factor %}
+{% set net_additional = agent_monthly - baseline_monthly %}
+<div class="section-card projection-card">
+  <div class="projection-header">
+    <span class="projection-icon">&#x1F4C8;</span>
+    <div>
+      <h2 class="section-title" style="margin:0">At-Scale Projection</h2>
+      <p class="chart-subtitle" style="margin:0">If Razorpay ran this agent on <strong>10M failed transactions/month</strong></p>
+    </div>
+  </div>
+  <div class="projection-grid">
+    <div class="projection-item projection-item--agent">
+      <div class="projection-label">Agent recovers</div>
+      <div class="projection-value">&#x20B9;{{ "{:,.0f}".format(agent_monthly) }}</div>
+      <div class="projection-sub">per month</div>
+    </div>
+    <div class="projection-arrow">vs</div>
+    <div class="projection-item projection-item--baseline">
+      <div class="projection-label">Single-retry baseline</div>
+      <div class="projection-value">&#x20B9;{{ "{:,.0f}".format(baseline_monthly) }}</div>
+      <div class="projection-sub">per month</div>
+    </div>
+    <div class="projection-arrow">&rarr;</div>
+    <div class="projection-item projection-item--net">
+      <div class="projection-label">Net additional recovery</div>
+      <div class="projection-value projection-value--highlight">&#x20B9;{{ "{:,.0f}".format(net_additional) }}</div>
+      <div class="projection-sub">per month incremental</div>
+    </div>
+  </div>
+  <p class="projection-footnote">Arithmetic extrapolation: same per-transaction recovery rate &times; 10M transactions. Baseline = single-attempt immediate retry. No assumptions beyond observed batch behaviour.</p>
+</div>
+
+
+<!-- == Compliance constraints == -->
 <div class="section-card">
   <h2 class="section-title">Compliance Constraints</h2>
   <div class="constraints-grid">
-
     <div class="constraint-item {% if metrics.stopping_rule_violations | int == 0 %}constraint--pass{% else %}constraint--fail{% endif %}">
-      <div class="constraint-icon">{% if metrics.stopping_rule_violations | int == 0 %}✅{% else %}❌{% endif %}</div>
+      <div class="constraint-icon">{% if metrics.stopping_rule_violations | int == 0 %}&#x2705;{% else %}&#x274C;{% endif %}</div>
       <div class="constraint-body">
         <div class="constraint-name">Stopping-rule violations</div>
         <div class="constraint-value">{{ metrics.stopping_rule_violations | int }}</div>
         <div class="constraint-target">Must be exactly 0</div>
       </div>
     </div>
-
     <div class="constraint-item {% if metrics.decisions_with_explanation_pct | float >= 100 %}constraint--pass{% else %}constraint--fail{% endif %}">
-      <div class="constraint-icon">{% if metrics.decisions_with_explanation_pct | float >= 100 %}✅{% else %}❌{% endif %}</div>
+      <div class="constraint-icon">{% if metrics.decisions_with_explanation_pct | float >= 100 %}&#x2705;{% else %}&#x274C;{% endif %}</div>
       <div class="constraint-body">
         <div class="constraint-name">Explanation coverage</div>
         <div class="constraint-value">{{ "%.1f" | format(metrics.decisions_with_explanation_pct | float) }}%</div>
         <div class="constraint-target">Must be 100%</div>
       </div>
     </div>
-
     <div class="constraint-item constraint--info">
-      <div class="constraint-icon">⚠️</div>
+      <div class="constraint-icon">&#x26A0;&#xFE0F;</div>
       <div class="constraint-body">
         <div class="constraint-name">False escalations</div>
         <div class="constraint-value">{{ metrics.false_escalation_count | int }} ({{ "%.1f" | format(metrics.false_escalation_rate_pct | float) }}%)</div>
         <div class="constraint-target">Reported honestly</div>
       </div>
     </div>
-
     <div class="constraint-item constraint--info">
-      <div class="constraint-icon">🔄</div>
+      <div class="constraint-icon">&#x1F504;</div>
       <div class="constraint-body">
         <div class="constraint-name">Policy overrides</div>
         <div class="constraint-value">{{ metrics.override_count | int }} ({{ "%.1f" | format(metrics.override_rate_pct | float) }}%)</div>
         <div class="constraint-target">Guardrail activity</div>
       </div>
     </div>
-
     <div class="constraint-item constraint--info">
-      <div class="constraint-icon">🤖</div>
+      <div class="constraint-icon">&#x1F916;</div>
       <div class="constraint-body">
-        <div class="constraint-name">LLM → Template fallback</div>
+        <div class="constraint-name">LLM &rarr; Template fallback</div>
         <div class="constraint-value">{{ metrics.llm_fallback_to_template_count | int }} ({{ "%.1f" | format(metrics.llm_fallback_rate_pct | float) }}%)</div>
         <div class="constraint-target">Pipeline never blocked</div>
       </div>
     </div>
-
     <div class="constraint-item constraint--info">
-      <div class="constraint-icon">🎲</div>
+      <div class="constraint-icon">&#x1F3B2;</div>
       <div class="constraint-body">
         <div class="constraint-name">Random seed</div>
         <div class="constraint-value mono">{{ metrics.random_seed | int }}</div>
         <div class="constraint-target">Reproducible</div>
       </div>
     </div>
-
   </div>
 </div>
 
-<!-- ── Architecture principle callout ───────────────────────────────── -->
+<!-- == Live Demo == -->
+<div class="section-card demo-card" id="live-demo">
+  <div class="demo-header">
+    <div class="demo-title-row">
+      <span class="demo-pulse"></span>
+      <h2 class="section-title" style="margin:0">Live Agent Demo</h2>
+      <span class="demo-badge">Try It Now</span>
+    </div>
+    <p class="chart-subtitle">Submit a transaction and watch the full pipeline decide in real time.</p>
+  </div>
+  <form id="demo-form" class="demo-form" onsubmit="return false;">
+    <div class="demo-fields">
+      <div class="demo-field">
+        <label class="demo-label" for="demo-amount">Amount (&#x20B9;)</label>
+        <input type="number" id="demo-amount" class="demo-input" value="25000" min="100" max="1000000" step="100" />
+      </div>
+      <div class="demo-field">
+        <label class="demo-label" for="demo-failure">Failure Code</label>
+        <select id="demo-failure" class="demo-input demo-select">
+          <option value="insufficient_funds">insufficient_funds &mdash; Soft decline</option>
+          <option value="do_not_honor">do_not_honor &mdash; Bank blocked</option>
+          <option value="card_expired" selected>card_expired &mdash; Card issue</option>
+          <option value="card_blocked">card_blocked &mdash; Hard stop &#x26D4;</option>
+          <option value="fraud_flag">fraud_flag &mdash; Hard stop &#x26D4;</option>
+          <option value="network_timeout">network_timeout &mdash; System error</option>
+          <option value="gateway_error">gateway_error &mdash; System error</option>
+          <option value="kyc_hold">kyc_hold &mdash; Hard stop &#x26D4;</option>
+          <option value="card_limit_exceeded">card_limit_exceeded &mdash; Card issue</option>
+          <option value="stolen_card">stolen_card &mdash; Hard stop &#x26D4;</option>
+          <option value="transaction_not_permitted">transaction_not_permitted &mdash; Soft decline</option>
+          <option value="invalid_card">invalid_card &mdash; Card issue</option>
+          <option value="bank_unavailable">bank_unavailable &mdash; System error</option>
+        </select>
+      </div>
+      <div class="demo-field">
+        <label class="demo-label" for="demo-method">Payment Method</label>
+        <select id="demo-method" class="demo-input demo-select">
+          <option value="card" selected>Card</option>
+          <option value="upi">UPI</option>
+          <option value="netbanking">Net Banking</option>
+          <option value="wallet">Wallet</option>
+        </select>
+      </div>
+    </div>
+    <button type="button" id="demo-run-btn" class="btn btn--demo" onclick="runDemo()">
+      <span class="btn-icon">&#x25B6;</span> Run Agent
+    </button>
+  </form>
+  <div id="demo-result" class="demo-result demo-result--hidden"></div>
+</div>
+
+<!-- == Principle banner == -->
 <div class="principle-banner">
-  <span class="principle-icon">◈</span>
+  <span class="principle-icon">&#x25C8;</span>
   <span class="principle-text">
     <strong>Core design principle:</strong> The LLM never touches money or state.
     All recovery actions are deterministic and bounded by policy guardrails. Explanations are generated by Google Gemini 2.5 Flash with deterministic template fallback.
     Decision authority rests entirely with the policy engine, not the LLM.
   </span>
-  <a href="/transactions" class="btn btn--outline">View All Transactions →</a>
+  <a href="/transactions" class="btn btn--outline">View All Transactions &rarr;</a>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  var C={agent:"#3fb950",mr:"#58a6ff",blind:"#e3b341",zero:"#484f58",stop:"#f85149",esc:"#bc8cff",grid:"rgba(48,54,61,0.6)",txt:"#8b949e"};
+  // Baseline bar
+  new Chart(document.getElementById("baselineChart"),{
+    type:"bar",
+    data:{labels:["Our Agent","Multi-Retry 3x","Single-Retry","Never Retry"],
+      datasets:[{label:"Recovered",data:[{{ metrics.recovered_inr_agent | float }},{{ metrics.recovered_inr_naive_multi_retry | float }},{{ metrics.recovered_inr_blind_retry | float }},0],
+        backgroundColor:[C.agent,C.mr,C.blind,C.zero],borderRadius:6,borderWidth:0,borderSkipped:false}]},
+    options:{indexAxis:"y",animation:{duration:900,easing:"easeOutQuart"},responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return" "+c.raw.toLocaleString("en-IN",{maximumFractionDigits:0});}}}},
+      scales:{x:{ticks:{color:C.txt,maxTicksLimit:6,callback:function(v){return(v/100000).toFixed(0)+"L";}},grid:{color:C.grid},border:{color:C.grid}},
+              y:{ticks:{color:C.txt},grid:{display:false},border:{display:false}}}}
+  });
+  // Action donut
+  fetch("/api/batch/breakdown").then(function(r){return r.json();}).then(function(data){
+    var labels=data.actions.map(function(a){return a.action;});
+    var values=data.actions.map(function(a){return a.count;});
+    var cm={retry_now:C.agent,retry_delayed:C.blind,stop:C.stop,escalate_to_human:C.esc,nudge_alt_method:C.mr};
+    var colors=labels.map(function(l){return cm[l]||"#484f58";});
+    new Chart(document.getElementById("actionDonut"),{
+      type:"doughnut",
+      data:{labels:labels,datasets:[{data:values,backgroundColor:colors,borderColor:"#0d1117",borderWidth:3,hoverOffset:8}]},
+      options:{animation:{duration:900,easing:"easeOutQuart"},responsive:true,maintainAspectRatio:false,cutout:"65%",
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var t=values.reduce(function(a,b){return a+b;},0);return" "+c.label+": "+c.raw.toLocaleString()+" ("+((c.raw/t)*100).toFixed(1)+"%)";}}}}
+      }
+    });
+    var leg=document.getElementById("donut-legend");
+    var total=values.reduce(function(a,b){return a+b;},0);
+    labels.forEach(function(l,i){
+      leg.innerHTML+='<div class="legend-item"><span class="legend-dot" style="background:'+colors[i]+'"></span><span class="legend-label">'+l.replace(/_/g," ")+'</span><span class="legend-value">'+values[i].toLocaleString()+' <span class="legend-pct">'+((values[i]/total)*100).toFixed(1)+'%</span></span></div>';
+    });
+  }).catch(function(){
+    var el=document.getElementById("actionDonut");
+    if(el)el.closest(".chart-card").querySelector(".chart-container").innerHTML='<p style="color:var(--text-muted);text-align:center;padding:2rem">Run simulation to see breakdown</p>';
+  });
+})();
+
+async function runDemo(){
+  var btn=document.getElementById("demo-run-btn"),result=document.getElementById("demo-result");
+  var amount=parseFloat(document.getElementById("demo-amount").value)||25000;
+  var failure=document.getElementById("demo-failure").value,method=document.getElementById("demo-method").value;
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Running pipeline&hellip;';
+  result.className="demo-result demo-result--loading";
+  result.innerHTML='<div class="pipeline-steps"><span class="ps ps--done">&#x2713; Ingestion</span><span class="ps ps--active">&#x21BB; Risk Model</span><span class="ps ps--wait">&#x25CB; Policy Engine</span><span class="ps ps--wait">&#x25CB; LLM Layer</span><span class="ps ps--wait">&#x25CB; Audit</span></div>';
+  var payload={txn_id:"DEMO-"+Date.now(),amount_inr:amount.toFixed(2),failure_code:failure,payment_method:method,customer_id:"cust_demo_001",merchant_id:"merch_demo_001",time_of_failure:new Date().toISOString(),retry_count_so_far:0,customer_contact_count_24h:0,gateway_raw_error:failure.replace(/_/g," "),is_subscription:false};
+  var upd=function(di,dc,ai){var s=document.querySelectorAll(".ps");if(s[di]){s[di].className="ps ps--"+dc;s[di].innerHTML="&#x2713; "+s[di].textContent.replace(/^[✓⟳◯] /,"");}if(ai>=0&&s[ai]){s[ai].className="ps ps--active";}};
+  setTimeout(function(){upd(1,"done",2);},400);
+  setTimeout(function(){upd(2,"done",3);},800);
+  setTimeout(function(){upd(3,"done",4);},1100);
+  try{
+    var resp=await fetch("/api/simulate/single",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    if(!resp.ok)throw new Error(await resp.text());
+    var rec=await resp.json();
+    setTimeout(function(){upd(4,"done",-1);renderResult(result,rec);btn.disabled=false;btn.innerHTML='<span class="btn-icon">&#x25B6;</span> Run Again';},1400);
+  }catch(e){result.className="demo-result demo-result--error";result.innerHTML="<strong>Error:</strong> "+e.message;btn.disabled=false;btn.innerHTML='<span class="btn-icon">&#x25B6;</span> Run Agent';}
+}
+function renderResult(el,rec){
+  var recovered=rec.simulated_outcome&&rec.simulated_outcome.recovered;
+  var amt=parseFloat((rec.simulated_outcome&&rec.simulated_outcome.amount_recovered_inr)||0);
+  var action=rec.final_action||"";
+  var cm={retry_now:"action-badge--retry-now",retry_delayed:"action-badge--retry-delayed",stop:"action-badge--stop",escalate_to_human:"action-badge--escalate-to-human",nudge_alt_method:"action-badge--nudge-alt-method"};
+  el.className="demo-result demo-result--show";
+  el.innerHTML='<div class="demo-result-grid"><div class="demo-result-main"><div class="demo-result-label">Final Action</div><span class="action-badge action-badge--lg '+(cm[action]||"")+'">'+action.replace(/_/g," ").toUpperCase()+'</span>'+(rec.was_overridden?'<div class="demo-override-pill">&#x1F6E1;&#xFE0F; Guardrail fired: <code>'+rec.guardrail_rule_id+'</code></div>':'')+'<div class="demo-outcome '+(recovered?"outcome-recovered":"outcome-failed")+'">'+(recovered?"&#x2705; Recovered &#x20B9;"+amt.toLocaleString("en-IN",{maximumFractionDigits:0}):"&#x274C; Not recovered this attempt")+'</div></div><div class="demo-result-explanation"><div class="demo-result-label">Agent Explanation</div><div class="demo-explanation-text">'+(rec.explanation&&rec.explanation.rationale||"&mdash;")+'</div><div class="demo-caveat">'+(rec.explanation&&rec.explanation.confidence_caveat||"")+'</div></div></div><a href="/transaction/'+rec.txn_id+'" class="btn btn--outline btn--sm" target="_blank">View Full Audit Record &#x2197;</a>';
+}
+</script>
+
 {% else %}
-<!-- ── No data state ──────────────────────────────────────────────────── -->
 <div class="empty-state">
-  <div class="empty-icon">◈</div>
+  <div class="empty-icon">&#x25C8;</div>
   <h2>No simulation data yet</h2>
   <p>Run the batch simulation to populate the dashboard.</p>
   <code class="empty-cmd">docker compose run simulation</code>

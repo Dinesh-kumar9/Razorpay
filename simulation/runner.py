@@ -113,6 +113,7 @@ def run_single(
         guardrail_rule_id=policy_decision.guardrail_rule_id,
         retry_delay_minutes=policy_decision.retry_delay_minutes,
         explanation=explanation,
+        shap_top_features=model_decision.shap_top_features,
         simulated_outcome=outcome,
         amount_recovered_inr=outcome.amount_recovered_inr,
     )

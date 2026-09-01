@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from schemas.decision import RecoveryAction
+from schemas.decision import RecoveryAction, SHAPFeature
 from schemas.explanation import LLMExplanation
 from schemas.transaction import FailureCode, PaymentMethod
 
@@ -80,6 +80,12 @@ class AuditRecord(BaseModel):
 
     # Explanation (always present — either LLM or template)
     explanation: LLMExplanation
+
+    # SHAP top features from the risk model — stored for drill-down UI
+    shap_top_features: list[SHAPFeature] | None = Field(
+        default=None,
+        description="Top-3 SHAP features from the risk model for the winning action",
+    )
 
     # Outcome
     simulated_outcome: SimulatedOutcome

@@ -125,6 +125,66 @@ class TestFastAPIEndpoints:
         assert "total_transactions" in data
         assert "total_at_risk_inr" in data
 
+    def test_batch_breakdown_endpoint_empty(self):
+        """GET /api/batch/breakdown → 404 when audit DB is empty."""
+        mock_logger = MagicMock()
+        mock_logger.count.return_value = 0
+        with patch("api.routers.batch.get_audit_logger", return_value=mock_logger):
+            client = TestClient(app)
+            response = client.get("/api/batch/breakdown")
+        assert response.status_code == 404
+
+    def test_batch_breakdown_endpoint_populated(self):
+        """GET /api/batch/breakdown → 200 with action + failure_code breakdown."""
+        from decimal import Decimal
+        from schemas.audit import AuditRecord, SimulatedOutcome
+        from schemas.explanation import LLMExplanation
+        from schemas.decision import RecoveryAction
+        from schemas.transaction import FailureCode, PaymentMethod
+        from datetime import UTC, datetime
+
+        record = AuditRecord(
+            txn_id="TXN-BREAKDOWN-001",
+            timestamp=datetime.now(tz=UTC),
+            amount_inr=Decimal("5000"),
+            failure_code=FailureCode.INSUFFICIENT_FUNDS,
+            payment_method=PaymentMethod.UPI,
+            customer_id="cust_bd_01",
+            merchant_id="merch_bd_01",
+            model_action=RecoveryAction.RETRY_DELAYED,
+            model_confidence=0.7,
+            final_action=RecoveryAction.RETRY_DELAYED,
+            was_overridden=False,
+            explanation=LLMExplanation(
+                rationale="Retry recommended.",
+                confidence_caveat="Timing uncertain.",
+                fallback_if_wrong="Nudge customer.",
+                customer_nudge_text=None,
+                internal_notes="test",
+                source="template",
+            ),
+            simulated_outcome=SimulatedOutcome(
+                recovered=True,
+                amount_recovered_inr=Decimal("5000"),
+                recovery_probability_used=0.6,
+            ),
+            amount_recovered_inr=Decimal("5000"),
+        )
+        mock_logger = MagicMock()
+        mock_logger.count.return_value = 1
+        mock_logger.get_all_records.return_value = [record]
+        with patch("api.routers.batch.get_audit_logger", return_value=mock_logger):
+            client = TestClient(app)
+            response = client.get("/api/batch/breakdown")
+        assert response.status_code == 200
+        data = response.json()
+        assert "actions" in data
+        assert "failure_codes" in data
+        assert data["total"] == 1
+        assert len(data["actions"]) == 1
+        assert data["actions"][0]["action"] == "retry_delayed"
+        assert data["actions"][0]["count"] == 1
+
     def test_simulate_single_endpoint(self):
         client = TestClient(app)
         payload = {

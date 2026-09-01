@@ -3,18 +3,17 @@
 
 {% block content %}
 <div class="page-header">
-  <a href="/transactions" class="back-link">← All Transactions</a>
+  <a href="/transactions" class="back-link">&larr; All Transactions</a>
   <h1 class="page-title mono">{{ txn_id }}</h1>
 </div>
 
 {% if record %}
 <div class="detail-grid">
 
-  <!-- ── Decision chain card ──────────────────────────────────────── -->
+  <!-- Decision chain card -->
   <div class="detail-card detail-card--full">
     <h2 class="card-title">Decision Chain</h2>
     <div class="decision-chain">
-
       <div class="chain-step">
         <div class="chain-label">Model Recommended</div>
         <span class="action-badge action-badge--lg action-badge--{{ record.model_action | replace('_','-') }}">
@@ -22,11 +21,9 @@
         </span>
         <div class="chain-sub">Confidence: {{ "%.0f" | format(record.model_confidence * 100) }}%</div>
       </div>
-
       <div class="chain-arrow">
-        {% if record.was_overridden %}→ <span class="override-label">GUARDRAIL FIRED</span> →{% else %}→{% endif %}
+        {% if record.was_overridden %}&rarr; <span class="override-label">GUARDRAIL FIRED</span> &rarr;{% else %}&rarr;{% endif %}
       </div>
-
       <div class="chain-step">
         <div class="chain-label">Final Action</div>
         <span class="action-badge action-badge--lg action-badge--{{ record.final_action | replace('_','-') }}">
@@ -34,34 +31,42 @@
         </span>
         {% if record.was_overridden %}
         <div class="chain-override">
-          <span class="rule-id">{{ record.guardrail_rule_id }}</span>
+          <span class="rule-id guardrail-flash">{{ record.guardrail_rule_id }}</span>
           <p class="override-reason">{{ record.override_reason }}</p>
+          {% if record.guardrail_rule_id %}
+          <div class="guardrail-regulation">
+            {% if 'HARD_STOP_001' in record.guardrail_rule_id %}&#x1F4CC; RBI Circular: fraud &amp; risk flags must be escalated to human review.
+            {% elif 'HARD_STOP_002' in record.guardrail_rule_id %}&#x1F4CC; Instrument-level fix required — retry is physically impossible.
+            {% elif 'RATE_LIMIT_001' in record.guardrail_rule_id %}&#x1F4CC; Retry cap: 3 attempts. Further retries violate internal SLA.
+            {% elif 'RATE_LIMIT_002' in record.guardrail_rule_id %}&#x1F4CC; DPDP Act: max 1 contact per 24h for nudge communications.
+            {% elif 'COOLDOWN_001' in record.guardrail_rule_id %}&#x1F4CC; Cooldown: retry_now blocked within 30 min of last attempt.
+            {% elif 'WINDOW_001' in record.guardrail_rule_id %}&#x1F4CC; TRAI DND: nudge communications restricted to 08:00&ndash;21:00.
+            {% endif %}
+          </div>
+          {% endif %}
         </div>
         {% endif %}
       </div>
-
-      <div class="chain-arrow">→</div>
-
+      <div class="chain-arrow">&rarr;</div>
       <div class="chain-step">
         <div class="chain-label">Outcome</div>
         {% if record.simulated_outcome.recovered %}
-          <div class="outcome-recovered">✅ Recovered</div>
-          <div class="outcome-amount">₹{{ "{:,.0f}".format(record.simulated_outcome.amount_recovered_inr | float) }}</div>
+          <div class="outcome-recovered">&#x2705; Recovered</div>
+          <div class="outcome-amount">&#x20B9;{{ "{:,.0f}".format(record.simulated_outcome.amount_recovered_inr | float) }}</div>
         {% else %}
-          <div class="outcome-failed">❌ Not recovered</div>
-          <div class="outcome-amount">₹0</div>
+          <div class="outcome-failed">&#x274C; Not recovered</div>
+          <div class="outcome-amount">&#x20B9;0</div>
         {% endif %}
         <div class="chain-sub">P(recover) used: {{ "%.0f" | format(record.simulated_outcome.recovery_probability_used * 100) }}%</div>
       </div>
-
     </div>
   </div>
 
-  <!-- ── Transaction details ──────────────────────────────────────── -->
+  <!-- Transaction details -->
   <div class="detail-card">
     <h2 class="card-title">Transaction Details</h2>
     <dl class="detail-list">
-      <dt>Amount</dt><dd>₹{{ "{:,.2f}".format(record.amount_inr | float) }}</dd>
+      <dt>Amount</dt><dd>&#x20B9;{{ "{:,.2f}".format(record.amount_inr | float) }}</dd>
       <dt>Failure Code</dt>
       <dd>
         <span class="code-pill code-pill--{{ 'danger' if record.failure_code in ['card_blocked','fraud_flag','kyc_hold','stolen_card'] else 'warning' if record.failure_code in ['card_expired','invalid_card'] else 'info' }}">
@@ -75,7 +80,42 @@
     </dl>
   </div>
 
-  <!-- ── LLM Explanation ──────────────────────────────────────────── -->
+  <!-- SHAP Feature Importance -->
+  <div class="detail-card">
+    <h2 class="card-title">SHAP Feature Importance <span class="card-title-sub">Why this risk score?</span></h2>
+    {% if record.shap_top_features %}
+    <div class="shap-chart">
+      {% set max_shap = record.shap_top_features | map(attribute='shap_value') | map('abs') | max %}
+      {% for feat in record.shap_top_features | sort(attribute='shap_value', reverse=True) %}
+      {% set bar_pct = ((feat.shap_value | abs) / max_shap * 100) | int %}
+      {% set is_pos = feat.shap_value > 0 %}
+      <div class="shap-row">
+        <div class="shap-feature-name">{{ feat.feature_name | replace('_',' ') }}</div>
+        <div class="shap-bar-container">
+          {% if is_pos %}
+            <div class="shap-bar shap-bar--positive" style="width:{{ bar_pct }}%">
+              <span class="shap-value-label">+{{ "%.4f" | format(feat.shap_value) }}</span>
+            </div>
+          {% else %}
+            <div class="shap-bar shap-bar--negative" style="width:{{ bar_pct }}%">
+              <span class="shap-value-label">{{ "%.4f" | format(feat.shap_value) }}</span>
+            </div>
+          {% endif %}
+        </div>
+        <div class="shap-feature-value mono">{{ feat.feature_value }}</div>
+      </div>
+      {% endfor %}
+      <div class="shap-legend">
+        <span class="shap-legend-item"><span class="shap-legend-dot shap-legend-dot--pos"></span>Increases risk (pushes toward escalation/stop)</span>
+        <span class="shap-legend-item"><span class="shap-legend-dot shap-legend-dot--neg"></span>Decreases risk (pushes toward retry)</span>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-muted" style="padding:1rem 0">No SHAP data available for this record.</p>
+    {% endif %}
+  </div>
+
+  <!-- LLM Explanation -->
   <div class="detail-card">
     <h2 class="card-title">
       Agent Explanation

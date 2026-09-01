@@ -21,8 +21,9 @@ from decimal import Decimal
 
 from dotenv import load_dotenv
 
-# Ensure .env is loaded before client instantiation
-load_dotenv(override=True)
+# Ensure .env is loaded before client instantiation.
+# override=False so that a shell-level GEMINI_API_KEY="" actually disables LLM calls.
+load_dotenv(override=False)
 
 from google import genai
 from google.genai import types

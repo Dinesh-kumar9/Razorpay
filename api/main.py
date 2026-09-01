@@ -94,9 +94,9 @@ async def index(request: Request) -> HTMLResponse:
             metrics = None
 
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "metrics": metrics,
             "record_count": record_count,
         },
@@ -106,7 +106,7 @@ async def index(request: Request) -> HTMLResponse:
 @app.get("/transactions", response_class=HTMLResponse, include_in_schema=False)
 async def transactions_page(request: Request) -> HTMLResponse:
     """Full transaction table with HTMX-powered filtering."""
-    return templates.TemplateResponse("transactions.html", {"request": request})
+    return templates.TemplateResponse(request, "transactions.html", {})
 
 
 @app.get("/transaction/{txn_id}", response_class=HTMLResponse, include_in_schema=False)
@@ -117,8 +117,9 @@ async def transaction_detail_page(request: Request, txn_id: str) -> HTMLResponse
     audit = get_audit_logger()
     record = audit.query_by_txn(txn_id)
     return templates.TemplateResponse(
+        request,
         "transaction_detail.html",
-        {"request": request, "record": record, "txn_id": txn_id},
+        {"record": record, "txn_id": txn_id},
     )
 
 
@@ -159,9 +160,9 @@ async def htmx_transactions_partial(
     total_pages = max(1, (total + 49) // 50)
 
     return templates.TemplateResponse(
+        request,
         "partials/transaction_rows.html",
         {
-            "request": request,
             "rows": rows,
             "total": total,
             "page": page,

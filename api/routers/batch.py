@@ -89,3 +89,46 @@ async def get_transaction(txn_id: str) -> AuditRecord:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Transaction {txn_id} not found.")
     return record
+
+
+class ActionCount(BaseModel):
+    action: str
+    count: int
+
+
+class FailureCodeCount(BaseModel):
+    failure_code: str
+    count: int
+
+
+class BatchBreakdown(BaseModel):
+    actions: list[ActionCount]
+    failure_codes: list[FailureCodeCount]
+    total: int
+
+
+@router.get("/batch/breakdown", response_model=BatchBreakdown)
+async def get_batch_breakdown() -> BatchBreakdown:
+    """
+    Return action distribution and failure code breakdown for chart rendering.
+    Used by the dashboard donut chart — fetched client-side via JS.
+    """
+    from collections import Counter
+
+    audit = get_audit_logger()
+    record_count = audit.count()
+    if record_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="No batch data found. Run `python -m simulation.runner` first.",
+        )
+    records = audit.get_all_records()
+    action_counts = Counter(r.final_action.value for r in records)
+    failure_counts = Counter(r.failure_code.value if hasattr(r.failure_code, 'value') else str(r.failure_code) for r in records)
+
+    return BatchBreakdown(
+        actions=[ActionCount(action=k, count=v) for k, v in sorted(action_counts.items(), key=lambda x: -x[1])],
+        failure_codes=[FailureCodeCount(failure_code=k, count=v) for k, v in sorted(failure_counts.items(), key=lambda x: -x[1])],
+        total=record_count,
+    )
+
