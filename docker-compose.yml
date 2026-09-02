@@ -11,7 +11,8 @@ services:
       - PYTHONPATH=/app
     volumes:
       - ./data:/app/data
-      - ./audit.db:/app/audit.db
+      # Mount data/ directory (not a bare file) to avoid Docker creating audit.db as a directory
+      - meridian_db:/app/db
     profiles: [simulation]
 
   # ── API + Dashboard ─────────────────────────────────────────────────────────
@@ -25,11 +26,18 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI:-false}
       - PYTHONPATH=/app
+      # Point the app at the named volume path
+      - AUDIT_DB_PATH=/app/db/audit.db
     volumes:
       - ./data:/app/data
-      - ./audit.db:/app/audit.db
+      - meridian_db:/app/db
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+volumes:
+  # Named volume ensures audit.db is always a file, never a directory.
+  # 'docker compose down -v' to reset.
+  meridian_db:
