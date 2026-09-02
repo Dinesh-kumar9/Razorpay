@@ -58,7 +58,10 @@ class Settings(BaseSettings):
     )
 
     # ── API server ─────────────────────────────────────────────────────────────
-    api_host: str = Field(default="0.0.0.0", description="API bind host.")
+    api_host: str = Field(
+        default="0.0.0.0",  # nosec B104 — intentional: containerised service listens on all interfaces
+        description="API bind host.",
+    )
     api_port: int = Field(default=8000, description="API bind port.")
 
     # ── Simulation ─────────────────────────────────────────────────────────────
