@@ -96,7 +96,7 @@ def run_single(
     # Stage 6: Outcome simulation
     outcome = simulate_outcome(txn, policy_decision.final_action, rng)
 
-    # Stage 6: Audit log
+    # Stage 7: Audit log
     record = AuditRecord(
         txn_id=txn.txn_id,
         timestamp=datetime.now(tz=UTC),
@@ -130,7 +130,7 @@ def run_batch(
     Run the full batch simulation over n synthetic failed transactions.
 
     Steps:
-      0. Load/train model (cached at data/models/recovery_model.pkl)
+      0. Load/train model (cached at data/models/recovery_model.json — XGBoost native JSON format)
       1. Generate n synthetic transactions (seeded)
       2. Run baselines over the same transactions (same RNG fork)
       3. Run agent pipeline for each transaction
