@@ -113,6 +113,44 @@ class AuditLogger:
                 ),
             )
 
+    def log_batch(self, records: list[AuditRecord]) -> None:
+        """
+        Append multiple AuditRecords in a single SQLite transaction.
+
+        Significantly faster than calling log() N times: one open/commit/close cycle
+        instead of N. Use this for batch simulation writes.
+
+        Raises sqlite3.Error on database failure (entire batch is rolled back).
+        """
+        if not records:
+            return
+        rows = [
+            (
+                r.txn_id,
+                r.timestamp.isoformat(),
+                r.failure_code.value,
+                r.final_action.value,
+                int(r.was_overridden),
+                r.guardrail_rule_id,
+                int(r.simulated_outcome.recovered),
+                float(r.amount_inr),
+                float(r.amount_recovered_inr),
+                json.dumps(r.model_dump(mode="json"), default=str),
+            )
+            for r in records
+        ]
+        with self._connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO audit_records
+                    (txn_id, timestamp, failure_code, final_action, was_overridden,
+                     guardrail_rule_id, recovered, amount_inr, amount_recovered_inr, record_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+        logger.info("Batch-logged %d audit records in a single transaction.", len(records))
+
     def get_all_records(self) -> list[AuditRecord]:
         """Return all records ordered by id (insertion order)."""
         with self._connect() as conn:
