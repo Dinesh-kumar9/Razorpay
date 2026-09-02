@@ -5,6 +5,9 @@
 > Intelligent recovery of failed payments using a bounded AI agent.
 > The LLM never touches money or state — it only touches language.
 
+![CI](https://github.com/Dinesh-kumar9/Razorpay/actions/workflows/ci.yml/badge.svg)
+![Coverage](https://codecov.io/gh/Dinesh-kumar9/Razorpay/branch/main/graph/badge.svg)
+
 ---
 
 ## The Core Principle
@@ -42,10 +45,12 @@ HTMX Dashboard (FastAPI + Jinja2)
 
 | Metric | Value | Target | Status |
 |---|---|---|---|
-| Total at-risk | Rs. 4,05,49,036 | — | — |
-| Agent recovered | **Rs. 1,08,96,228** | — | — |
-| Blind-retry baseline | Rs. 21,13,118 | — | — |
-| Uplift vs blind retry | **+415.6%** | ≥20% | ✅ |
+| Total at-risk | ₹4,05,49,036 | — | — |
+| Agent recovered | **₹1,08,96,228** | — | — |
+| Multi-retry baseline (3× unconstrained) | ₹87,18,500 | — | — |
+| Blind-retry baseline (1× immediate) | ₹21,13,118 | — | — |
+| **Uplift vs multi-retry (headline)** | **+25.0%** | ≥20% | ✅ |
+| Uplift vs blind retry (secondary) | +415.6% | ≥20% | ✅ |
 | Stopping-rule violations | **0** | 0 | ✅ |
 | Explanation coverage | **100%** | 100% | ✅ |
 | False-escalation count | 0 (0.0%) | reported honestly | ✅ |
@@ -53,6 +58,7 @@ HTMX Dashboard (FastAPI + Jinja2)
 | LLM fallback rate | 100% (no key set) | reported honestly | ℹ️ |
 
 > **Reproducible.** Run `python -m simulation.runner` with seed=42 to get identical numbers.
+> The CI `reproducibility` job verifies this on every push by running twice and diffing the output.
 
 ---
 
@@ -145,6 +151,53 @@ project-meridian/
 | `API_HOST` | No | `0.0.0.0` | API bind host |
 | `API_PORT` | No | `8000` | API bind port |
 | `SIMULATION_RANDOM_SEED` | No | `42` | Simulation seed |
+
+---
+
+## Non-Goals
+
+These are **deliberate exclusions**, not gaps:
+
+- **Real customer contact** — SMS/WhatsApp/email are simulated only (logged as "would send"), not sent. Real delivery requires regulatory opt-in infrastructure outside this scope.
+- **Fraud detection** — That is Track 2. This system consumes fraud signals (e.g., `fraud_flag` → hard stop) but does not produce them.
+- **Checkout abandonment / overdue receivables** — These are valid future tracks; they require different action spaces and different data schemas. Mentioned in `docs/adr/0001`.
+- **Multi-currency / international failure codes** — INR and Indian bank failure codes only.
+- **Production traffic** — Synthetic data only, explicitly cited in `docs/data_provenance.md`.
+- **Unbounded LLM actions** — By design. The LLM has no path to execution, even a mediated one.
+
+---
+
+## What Broke (And How We Fixed It)
+
+Razorpay explicitly asks: *"Document a real failure you hit and how you diagnosed/fixed it."* Here are three.
+
+### 1. SHAP Explainer Crashed on `candidate_action_id`
+
+**Problem:** `shap.TreeExplainer` was returning SHAP values for all features including the `candidate_action_id` column. When we tried to surface the "top features" to the LLM prompt, the feature `candidate_action_id=2` (an internal ordinal) appeared in the rationale — meaningless to a merchant analyst.
+
+**Diagnosis:** The feature importance was being computed over all `n_features + 1` columns including the action column.
+
+**Fix:** `risk_model/shap_explainer.py` now explicitly excludes the last feature (`vals[:-1]`) before ranking by absolute SHAP value. Added a unit test to assert the action feature never appears in `top_features()`.
+
+---
+
+### 2. Cooldown Rule Had an Off-By-One at Exactly 30 Minutes
+
+**Problem:** The policy rule `COOLDOWN_001` fires when `minutes_since_contact < 30`. A transaction with `last_contact = exactly 30 minutes ago` should **not** trigger the cooldown — the customer is contactable. But our boundary test was failing: the rule was blocking at exactly 30 minutes.
+
+**Diagnosis:** The check was `elapsed_min <= COOLDOWN_MINUTES` (≤) instead of `elapsed_min < COOLDOWN_MINUTES` (<). 
+
+**Fix:** Changed the comparison in `policy_engine/rules.py` to strict less-than. The boundary tests in `tests/test_policy_engine.py:TestCooldown001` explicitly test `minutes=29` (fires), `minutes=30` (does not fire), and `minutes=31` (does not fire).
+
+---
+
+### 3. Gemini Returned Markdown-Fenced JSON, Breaking Pydantic Validation
+
+**Problem:** When calling Gemini 2.5 Flash with `response_mime_type="application/json"`, the API occasionally returned the JSON body wrapped in triple-backtick markdown fences (` ```json\n{...}\n``` `). Pydantic rejected this as invalid JSON, causing every LLM call to fall back to the template.
+
+**Diagnosis:** Logged the raw LLM response string in `llm_layer/client.py` and observed the fenced format in the exception output.
+
+**Fix:** Added a `_strip_markdown_fences()` helper in `llm_layer/client.py` that strips ` ```json ` / ` ``` ` wrappers before passing to `json.loads()`. The fallback path remains intact: if stripping doesn't produce valid JSON either, template fallback fires.
 
 ---
 
