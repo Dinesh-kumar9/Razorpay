@@ -762,3 +762,115 @@ body {
   line-height: 1.5;
 }
 
+/* ── Guardrail Preset Row ─────────────────────────────────────────────────── */
+.preset-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.preset-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  margin-right: 0.25rem;
+}
+
+.preset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.preset-btn:hover {
+  border-color: var(--red);
+  color: var(--text-primary);
+  background: rgba(248,81,73,0.08);
+}
+
+.preset-btn--active {
+  border-color: var(--red);
+  background: rgba(248,81,73,0.12);
+  color: var(--red);
+}
+
+.preset-btn--clear:hover,
+.preset-btn--clear.preset-btn--active {
+  border-color: var(--green);
+  background: rgba(63,185,80,0.08);
+  color: var(--green);
+}
+
+/* ── Preset hint strip ───────────────────────────────────────────────────── */
+.preset-hint {
+  font-size: 0.8rem;
+  color: var(--amber);
+  background: rgba(227,179,65,0.07);
+  border: 1px solid rgba(227,179,65,0.2);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.85rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+
+/* ── Demo field hint text ────────────────────────────────────────────────── */
+.demo-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 1px;
+  font-weight: 400;
+}
+
+/* ── Extended demo grid for 6 fields ────────────────────────────────────── */
+.demo-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+/* ── Enhanced override banner ────────────────────────────────────────────── */
+.demo-override-pill--prominent {
+  margin-top: 0.85rem;
+  padding: 0.65rem 1rem;
+  background: rgba(248,81,73,0.1);
+  border: 1px solid rgba(248,81,73,0.35);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  color: var(--red);
+  animation: guardrailPulse 1.5s ease 0.3s 2;
+}
+
+.demo-override-pill--prominent code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: rgba(248,81,73,0.15);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.override-reason {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+

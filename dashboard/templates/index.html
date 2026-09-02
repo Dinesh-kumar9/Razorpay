@@ -152,8 +152,19 @@
       <h2 class="section-title" style="margin:0">Live Agent Demo</h2>
       <span class="demo-badge">Try It Now</span>
     </div>
-    <p class="chart-subtitle">Submit a transaction and watch the full pipeline decide in real time.</p>
+    <p class="chart-subtitle">Submit a transaction and watch the full pipeline decide in real time. Use <strong>Guardrail Presets</strong> to trigger policy engine overrides live.</p>
   </div>
+
+  <!-- Guardrail Preset Buttons -->
+  <div class="preset-row" id="demo-presets">
+    <span class="preset-label">Guardrail presets:</span>
+    <button class="preset-btn" onclick="applyPreset('hard_stop')" title="HARD_STOP_001 — fraud/KYC triggers unconditional escalation">🚨 Hard Stop</button>
+    <button class="preset-btn" onclick="applyPreset('rate_limit')" title="RATE_LIMIT_001 — max retries exceeded, STOP fires">🔢 Rate Limit</button>
+    <button class="preset-btn" onclick="applyPreset('cooldown')" title="COOLDOWN_001 — contacted 15 min ago, immediate retry blocked">⏱ Cooldown</button>
+    <button class="preset-btn" onclick="applyPreset('dnd_window')" title="WINDOW_001 — outside 08:00–21:00, nudge blocked">🌙 DND Window</button>
+    <button class="preset-btn preset-btn--clear" onclick="applyPreset('clean')" title="Clean transaction — no guardrail fires, model decides">✅ Clean</button>
+  </div>
+
   <form id="demo-form" class="demo-form" onsubmit="return false;">
     <div class="demo-fields">
       <div class="demo-field">
@@ -187,6 +198,19 @@
           <option value="wallet">Wallet</option>
         </select>
       </div>
+      <!-- Guardrail-triggering fields -->
+      <div class="demo-field">
+        <label class="demo-label" for="demo-retry-count">Retry Count <span class="demo-hint">≥3 triggers RATE_LIMIT_001</span></label>
+        <input type="number" id="demo-retry-count" class="demo-input" value="0" min="0" max="5" step="1" />
+      </div>
+      <div class="demo-field">
+        <label class="demo-label" for="demo-contact-min">Last Contact (min ago) <span class="demo-hint">&lt;30 triggers COOLDOWN_001</span></label>
+        <input type="number" id="demo-contact-min" class="demo-input" value="" min="0" max="1440" step="1" placeholder="None" />
+      </div>
+      <div class="demo-field">
+        <label class="demo-label" for="demo-hour">Hour of Day (0–23) <span class="demo-hint">&lt;8 or ≥21 triggers WINDOW_001</span></label>
+        <input type="number" id="demo-hour" class="demo-input" value="" min="0" max="23" step="1" placeholder="Now" />
+      </div>
     </div>
     <button type="button" id="demo-run-btn" class="btn btn--demo" onclick="runDemo()">
       <span class="btn-icon">&#x25B6;</span> Run Agent
@@ -207,6 +231,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="/static/dashboard.js"></script>
 <script>
 (function(){
   var C={agent:"#3fb950",mr:"#58a6ff",blind:"#e3b341",zero:"#484f58",stop:"#f85149",esc:"#bc8cff",grid:"rgba(48,54,61,0.6)",txt:"#8b949e"};
@@ -231,8 +256,7 @@
       type:"doughnut",
       data:{labels:labels,datasets:[{data:values,backgroundColor:colors,borderColor:"#0d1117",borderWidth:3,hoverOffset:8}]},
       options:{animation:{duration:900,easing:"easeOutQuart"},responsive:true,maintainAspectRatio:false,cutout:"65%",
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var t=values.reduce(function(a,b){return a+b;},0);return" "+c.label+": "+c.raw.toLocaleString()+" ("+((c.raw/t)*100).toFixed(1)+"%)";}}}}
-      }
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var t=values.reduce(function(a,b){return a+b;},0);return" "+c.label+": "+c.raw.toLocaleString()+" ("+((c.raw/t)*100).toFixed(1)+"%)";}}}}}
     });
     var leg=document.getElementById("donut-legend");
     var total=values.reduce(function(a,b){return a+b;},0);
@@ -244,34 +268,6 @@
     if(el)el.closest(".chart-card").querySelector(".chart-container").innerHTML='<p style="color:var(--text-muted);text-align:center;padding:2rem">Run simulation to see breakdown</p>';
   });
 })();
-
-async function runDemo(){
-  var btn=document.getElementById("demo-run-btn"),result=document.getElementById("demo-result");
-  var amount=parseFloat(document.getElementById("demo-amount").value)||25000;
-  var failure=document.getElementById("demo-failure").value,method=document.getElementById("demo-method").value;
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Running pipeline&hellip;';
-  result.className="demo-result demo-result--loading";
-  result.innerHTML='<div class="pipeline-steps"><span class="ps ps--done">&#x2713; Ingestion</span><span class="ps ps--active">&#x21BB; Risk Model</span><span class="ps ps--wait">&#x25CB; Policy Engine</span><span class="ps ps--wait">&#x25CB; LLM Layer</span><span class="ps ps--wait">&#x25CB; Audit</span></div>';
-  var payload={txn_id:"DEMO-"+Date.now(),amount_inr:amount.toFixed(2),failure_code:failure,payment_method:method,customer_id:"cust_demo_001",merchant_id:"merch_demo_001",time_of_failure:new Date().toISOString(),retry_count_so_far:0,customer_contact_count_24h:0,gateway_raw_error:failure.replace(/_/g," "),is_subscription:false};
-  var upd=function(di,dc,ai){var s=document.querySelectorAll(".ps");if(s[di]){s[di].className="ps ps--"+dc;s[di].innerHTML="&#x2713; "+s[di].textContent.replace(/^[✓⟳◯] /,"");}if(ai>=0&&s[ai]){s[ai].className="ps ps--active";}};
-  setTimeout(function(){upd(1,"done",2);},400);
-  setTimeout(function(){upd(2,"done",3);},800);
-  setTimeout(function(){upd(3,"done",4);},1100);
-  try{
-    var resp=await fetch("/api/simulate/single",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    if(!resp.ok)throw new Error(await resp.text());
-    var rec=await resp.json();
-    setTimeout(function(){upd(4,"done",-1);renderResult(result,rec);btn.disabled=false;btn.innerHTML='<span class="btn-icon">&#x25B6;</span> Run Again';},1400);
-  }catch(e){result.className="demo-result demo-result--error";result.innerHTML="<strong>Error:</strong> "+e.message;btn.disabled=false;btn.innerHTML='<span class="btn-icon">&#x25B6;</span> Run Agent';}
-}
-function renderResult(el,rec){
-  var recovered=rec.simulated_outcome&&rec.simulated_outcome.recovered;
-  var amt=parseFloat((rec.simulated_outcome&&rec.simulated_outcome.amount_recovered_inr)||0);
-  var action=rec.final_action||"";
-  var cm={retry_now:"action-badge--retry-now",retry_delayed:"action-badge--retry-delayed",stop:"action-badge--stop",escalate_to_human:"action-badge--escalate-to-human",nudge_alt_method:"action-badge--nudge-alt-method"};
-  el.className="demo-result demo-result--show";
-  el.innerHTML='<div class="demo-result-grid"><div class="demo-result-main"><div class="demo-result-label">Final Action</div><span class="action-badge action-badge--lg '+(cm[action]||"")+'">'+action.replace(/_/g," ").toUpperCase()+'</span>'+(rec.was_overridden?'<div class="demo-override-pill">&#x1F6E1;&#xFE0F; Guardrail fired: <code>'+rec.guardrail_rule_id+'</code></div>':'')+'<div class="demo-outcome '+(recovered?"outcome-recovered":"outcome-failed")+'">'+(recovered?"&#x2705; Recovered &#x20B9;"+amt.toLocaleString("en-IN",{maximumFractionDigits:0}):"&#x274C; Not recovered this attempt")+'</div></div><div class="demo-result-explanation"><div class="demo-result-label">Agent Explanation</div><div class="demo-explanation-text">'+(rec.explanation&&rec.explanation.rationale||"&mdash;")+'</div><div class="demo-caveat">'+(rec.explanation&&rec.explanation.confidence_caveat||"")+'</div></div></div><a href="/transaction/'+rec.txn_id+'" class="btn btn--outline btn--sm" target="_blank">View Full Audit Record &#x2197;</a>';
-}
 </script>
 
 {% else %}
