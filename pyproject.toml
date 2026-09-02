@@ -51,6 +51,11 @@ addopts = [
     "-v",
 ]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+# Per-module thresholds — policy_engine is the load-bearing component; 90% is enforced.
+[tool.coverage.paths]
+policy_engine = ["policy_engine"]
 
 # ── Coverage ───────────────────────────────────────────────────────────────────
 [tool.coverage.run]
