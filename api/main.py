@@ -61,6 +61,13 @@ app.include_router(simulate.router, prefix="/api")
 
 # ── HTMX page routes ──────────────────────────────────────────────────────────
 
+# Canonical seed offsets — must match simulation/runner.py run_batch() exactly.
+# seed=42 → blind_retry uses 1042, naive_multi_retry uses 1542.
+_SIMULATION_SEED: int = 42
+_BLIND_RETRY_SEED: int = _SIMULATION_SEED + 1000   # 1042
+_MULTI_RETRY_SEED: int = _SIMULATION_SEED + 1500   # 1542
+
+
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index(request: Request) -> HTMLResponse:
     """Batch summary dashboard — the first thing a judge sees."""
@@ -68,7 +75,7 @@ async def index(request: Request) -> HTMLResponse:
 
     from api.dependencies import get_audit_logger
     from ingestion.generator import generate_transactions
-    from simulation.baselines import run_blind_retry_baseline
+    from simulation.baselines import run_blind_retry_baseline, run_naive_multi_retry_baseline
     from simulation.metrics import compute_metrics
 
     audit = get_audit_logger()
@@ -78,17 +85,14 @@ async def index(request: Request) -> HTMLResponse:
     if record_count > 0:
         try:
             records = audit.get_all_records()
-            # Regenerate the same synthetic set to compute blind-retry baseline
-            txns = generate_transactions(n=record_count, random_seed=42)
-            blind_rng = random.Random(1042)
-            multi_rng = random.Random(2042)
-            from simulation.baselines import (
-                run_blind_retry_baseline,
-                run_naive_multi_retry_baseline,
-            )
+            # Regenerate the same synthetic set to compute baselines.
+            # Seeds must match runner.py run_batch() so dashboard numbers are identical to CLI.
+            txns = generate_transactions(n=record_count, random_seed=_SIMULATION_SEED)
+            blind_rng = random.Random(_BLIND_RETRY_SEED)
+            multi_rng = random.Random(_MULTI_RETRY_SEED)
             recovered_blind = run_blind_retry_baseline(txns, blind_rng)
             recovered_multi = run_naive_multi_retry_baseline(txns, multi_rng)
-            metrics = compute_metrics(records, recovered_blind, recovered_multi, seed=42)
+            metrics = compute_metrics(records, recovered_blind, recovered_multi, seed=_SIMULATION_SEED)
         except Exception as exc:
             logging.getLogger(__name__).error("Dashboard metrics failed: %s", exc, exc_info=True)
             metrics = None
