@@ -27,7 +27,7 @@ XGBoost Uplift Model ───────────────────�
 Policy Engine (FINAL AUTHORITY) ───────────────── 6 guardrail rules, priority-ordered
      │  policy.final_action
      ▼
-LLM Explanation Layer (advisory only) ─────────── Google Gemini 2.5 Flash → Pydantic validate → template fallback
+LLM Explanation Layer (advisory only) ─────────── Gemini 2.5 Flash → Groq llama-3.3-70b → template fallback
      │  explanation.rationale
      ▼
 Simulated Execution + Outcome Model
@@ -56,7 +56,7 @@ HTMX Dashboard (FastAPI + Jinja2)
 
 > **Why the unconstrained baseline is disqualified:** Blind multi-retry recovers more revenue but
 > commits 15,890 policy violations — 6,438 retries on fraud/KYC-flagged cards (RBI), 6,144
-> contacts outside 08:00–21:00 (TRAI DND), 2,961 exceeding max-retry caps, and 347 cooldown
+> contacts outside 09:00–21:00 IST (TRAI DND), 2,961 exceeding max-retry caps, and 347 cooldown
 > breaches. This is the entire point of the guardrail system.
 
 > **Reproducible.** Run `python -m simulation.runner` with seed=42 to get identical numbers.
@@ -105,7 +105,7 @@ uvicorn api.main:app --reload --port 8000
 | [0002](docs/adr/0002-policy-engine-overrides-model.md) | Policy engine overrides model |
 | [0003](docs/adr/0003-synthetic-data-provenance.md) | Fully synthetic, cited dataset |
 | [0004](docs/adr/0004-uplift-model-design.md) | Single XGBoost with action as feature |
-| [0005](docs/adr/0005-llm-fallback-design.md) | Schema-validate-or-template fallback (Gemini 2.5 Flash) |
+| [0005](docs/adr/0005-llm-fallback-design.md) | Schema-validate-or-template fallback (Gemini 2.5 Flash → Groq cascade) |
 | [0006](docs/adr/0006-htmx-dashboard.md) | HTMX server-rendered dashboard |
 | [0007](docs/adr/0007-no-agent-framework.md) | No agent framework |
 
@@ -120,7 +120,7 @@ uvicorn api.main:app --reload --port 8000
 | `RATE_LIMIT_001` | retry_count ≥ 3 + retry action | → STOP |
 | `RATE_LIMIT_002` | contact_count_24h ≥ 1 + nudge action | → retry_delayed (DPDP) |
 | `COOLDOWN_001` | last_contact < 30 min + retry_now | → retry_delayed |
-| `WINDOW_001` | nudge outside 08:00–21:00 | → retry_delayed (TRAI DND) |
+| `WINDOW_001` | nudge outside 09:00–21:00 IST | → retry_delayed (TRAI DND 9 PM–9 AM) |
 
 ---
 
@@ -132,7 +132,7 @@ project-meridian/
 ├── ingestion/       Synthetic transaction generator
 ├── risk_model/      XGBoost uplift model + SHAP explainer
 ├── policy_engine/   Guardrail rules (the load-bearing component)
-├── llm_layer/       Google Gemini 2.5 Flash + deterministic fallback
+├── llm_layer/       Gemini 2.5 Flash → Groq llama-3.3-70b → deterministic template (cascade)
 ├── execution/       Simulated Razorpay API executor
 ├── audit/           Append-only SQLite audit log
 ├── simulation/      Batch runner + baselines + metrics
@@ -148,8 +148,9 @@ project-meridian/
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `GEMINI_API_KEY` | No | (empty) | Google Gemini 2.5 Flash key. If unset, template fallback is used. |
+| `GEMINI_API_KEY` | No | (empty) | Google Gemini 2.5 Flash key. Falls through to Groq if unset. |
 | `GOOGLE_GENAI_USE_VERTEXAI` | No | `false` | Force Gemini Developer API (API key mode) |
+| `GROQ_API_KEY` | No | (empty) | Groq key (console.groq.com). Secondary LLM — 6,000 req/day free. Falls through to template if unset. |
 | `API_HOST` | No | `0.0.0.0` | API bind host |
 | `API_PORT` | No | `8000` | API bind port |
 | `SIMULATION_RANDOM_SEED` | No | `42` | Simulation seed |
