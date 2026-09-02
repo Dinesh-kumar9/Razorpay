@@ -12,7 +12,7 @@
  *   RATE_LIMIT_001: retry_count_so_far >= MAX_RETRIES (3)
  *   CONTACT_LIMIT_002: customer_contact_count_24h >= 1
  *   COOLDOWN_001: last_contact_time within 30 minutes
- *   WINDOW_001: time_of_failure outside 08:00–21:00
+ *   WINDOW_001: time_of_failure outside 09:00–21:00 (TRAI DND: 21:00–09:00 IST)
  */
 
 "use strict";
@@ -37,15 +37,17 @@ function applyPreset(name) {
       amount: 8000,
       method: "upi",
       retryCount: 3,
+      contactCount: 1,
       contactMin: null,
       hour: 14,
-      hint: "RATE_LIMIT_001 will fire — retry_count_so_far=3 hits the MAX_RETRIES_PER_TXN cap → STOP.",
+      hint: "RATE_LIMIT_001 will fire (retry_count=3 ≥ MAX_RETRIES_PER_TXN). RATE_LIMIT_002 also fires (customer_contact_count_24h=1 ≥ 1).",
     },
     cooldown: {
       failure: "network_timeout",
       amount: 15000,
       method: "card",
       retryCount: 1,
+      contactCount: 0,
       contactMin: 15,
       hour: 14,
       hint: "COOLDOWN_001 will fire — contacted 15 min ago, within the 30-min cooldown window.",
@@ -55,15 +57,17 @@ function applyPreset(name) {
       amount: 5000,
       method: "netbanking",
       retryCount: 0,
+      contactCount: 0,
       contactMin: null,
-      hour: 3,
-      hint: "WINDOW_001 will fire — 03:00 is outside the 08:00–21:00 contact window.",
+      hour: 22,
+      hint: "WINDOW_001 will fire — 22:00 is inside the TRAI DND window (21:00–09:00 IST).",
     },
     clean: {
       failure: "card_expired",
       amount: 25000,
       method: "card",
       retryCount: 0,
+      contactCount: 0,
       contactMin: null,
       hour: 14,
       hint: "No guardrail fires — card_expired with 0 retries, model chooses nudge_alt_method.",
@@ -79,6 +83,9 @@ function applyPreset(name) {
   setFieldValue("demo-retry-count", p.retryCount);
   setFieldValue("demo-contact-min", p.contactMin !== null ? p.contactMin : "");
   setFieldValue("demo-hour", p.hour !== null ? p.hour : "");
+  // store contactCount on form element for runDemo to pick up
+  var form = document.getElementById("demo-form");
+  if (form) form.dataset.contactCount = p.contactCount !== undefined ? p.contactCount : 0;
 
   // Show hint strip
   var hint = document.getElementById("demo-preset-hint");
@@ -160,6 +167,11 @@ async function runDemo() {
   var lastContact = buildLastContactTime(contactMin);
   var timeOfFailure = buildTimestamp(hourVal);
 
+  var form = document.getElementById("demo-form");
+  var contactCount = form && form.dataset.contactCount !== undefined
+    ? parseInt(form.dataset.contactCount, 10) || 0
+    : (retryCount > 0 ? retryCount : 0);
+
   var payload = {
     txn_id: txnId,
     amount_inr: amount.toFixed(2),
@@ -169,7 +181,7 @@ async function runDemo() {
     merchant_id: "merch_demo_001",
     time_of_failure: timeOfFailure,
     retry_count_so_far: retryCount,
-    customer_contact_count_24h: retryCount > 0 ? retryCount : 0,
+    customer_contact_count_24h: contactCount,
     last_contact_time: lastContact,
     gateway_raw_error: failure.replace(/_/g, " "),
     is_subscription: false,

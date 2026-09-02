@@ -42,12 +42,12 @@ Rationale: Most payment gateways enforce a rate limit at the bank rails level;
 submitting the same card within 30 minutes increases decline probability.
 """
 
-CONTACT_WINDOW_START_HOUR: int = 8
+CONTACT_WINDOW_START_HOUR: int = 9
 CONTACT_WINDOW_END_HOUR: int = 21
 """
-Customer contact is only permitted between 08:00–21:00 local time.
-Rationale: TRAI DND regulations; contacting customers outside this window
-constitutes unsolicited commercial communication.
+Customer contact is only permitted between 09:00–21:00 local time.
+Rationale: TRAI DND regulations prohibit unsolicited commercial communication
+outside 9 AM–9 PM IST. Condition: hour >= 21 or hour < 9 → WINDOW_001 fires.
 """
 
 DEFAULT_RETRY_DELAY_MINUTES: int = 60
@@ -251,18 +251,18 @@ def check_WINDOW_001(
     proposed_action: RecoveryAction,
 ) -> RuleResult | None:
     """
-    Time window: no customer-facing contact outside 08:00–21:00 local time.
+    Time window: no customer-facing contact outside 09:00–21:00 IST (TRAI DND).
 
     A nudge_alt_method action sends a message to the customer. If the current
     time is outside the permitted contact window, the nudge is replaced with a
     delayed retry scheduled for the next window opening.
 
     Rationale: TRAI DND regulations prohibit unsolicited commercial communication
-    outside 9am–9pm. We use a conservative 8am–9pm window to provide buffer.
+    outside 9 AM–9 PM IST. Exact condition: current_hour >= 21 or current_hour < 9.
 
-    Note: 'local time' here uses the time embedded in the transaction's
-    time_of_failure timestamp. In production this would use the customer's
-    registered timezone; in simulation we treat it as IST.
+    Note: 'local time' uses the hour embedded in the transaction's time_of_failure
+    timestamp. In production this would use the customer's registered timezone;
+    in simulation we treat it as IST.
     """
     if proposed_action != RecoveryAction.NUDGE_ALT_METHOD:
         return None

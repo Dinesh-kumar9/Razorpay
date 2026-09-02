@@ -257,13 +257,14 @@ class TestCooldown001:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# WINDOW_001 — hour_of_day boundaries at 8 and 21
+# WINDOW_001 — hour_of_day boundaries at 9 and 21 (TRAI DND: 21:00–09:00)
+# Fires when: current_hour >= 21 or current_hour < 9
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestWindow001:
-    """Rule: no nudge messages outside 08:00–21:00."""
+    """Rule: no nudge messages outside 09:00–21:00 (TRAI DND exact)."""
 
-    @pytest.mark.parametrize("hour", [0, 1, 5, 7])
+    @pytest.mark.parametrize("hour", [0, 1, 5, 7, 8])  # 8 PM now inside DND
     def test_before_window_blocks_nudge(self, hour: int) -> None:
         from policy_engine.engine import PolicyEngine
         eng = PolicyEngine()
@@ -273,15 +274,24 @@ class TestWindow001:
         assert decision.guardrail_rule_id == "WINDOW_001"
 
     def test_exactly_at_window_start_allows_nudge(self) -> None:
-        """Hour 8 == CONTACT_WINDOW_START_HOUR → nudge is permitted."""
+        """Hour 9 == CONTACT_WINDOW_START_HOUR → nudge is permitted (TRAI 9 AM boundary)."""
         from policy_engine.engine import PolicyEngine
         eng = PolicyEngine()
-        txn = make_txn(hour_of_day=8)
+        txn = make_txn(hour_of_day=9)
         decision = eng.evaluate(txn, make_model_decision(txn, action=RecoveryAction.NUDGE_ALT_METHOD))
         assert decision.final_action == RecoveryAction.NUDGE_ALT_METHOD
         assert decision.guardrail_rule_id != "WINDOW_001"
 
-    @pytest.mark.parametrize("hour", [9, 12, 14, 18, 20])
+    def test_hour_20_inside_window_allows_nudge(self) -> None:
+        """Hour 20 (8 PM) is inside the 09:00–21:00 window — nudge permitted."""
+        from policy_engine.engine import PolicyEngine
+        eng = PolicyEngine()
+        txn = make_txn(hour_of_day=20)
+        decision = eng.evaluate(txn, make_model_decision(txn, action=RecoveryAction.NUDGE_ALT_METHOD))
+        assert decision.final_action == RecoveryAction.NUDGE_ALT_METHOD
+        assert decision.guardrail_rule_id != "WINDOW_001"
+
+    @pytest.mark.parametrize("hour", [10, 12, 14, 18, 20])
     def test_inside_window_allows_nudge(self, hour: int) -> None:
         from policy_engine.engine import PolicyEngine
         eng = PolicyEngine()

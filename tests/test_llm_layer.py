@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -95,20 +95,19 @@ class TestLLMExplainer:
     """LLMExplainer.explain() never raises; falls back on any failure."""
 
     def test_no_api_key_returns_template(self) -> None:
-        """When GEMINI_API_KEY is not set, fallback is used immediately."""
-        with patch.dict("os.environ", {"GEMINI_API_KEY": ""}, clear=False):
-            explainer = LLMExplainer(api_key="")
+        """When both GEMINI_API_KEY and GROQ_API_KEY are empty, template fallback is used."""
+        explainer = LLMExplainer(api_key="", groq_api_key="")
         pd = make_policy_decision()
         result = explainer.explain(pd, make_shap_features(), "bank error", Decimal("1000"), "insufficient_funds")
         assert isinstance(result, LLMExplanation)
         assert result.source == "template"
 
     def test_api_exception_returns_template(self) -> None:
-        """API call raising any exception → fallback, no raise."""
-        explainer = LLMExplainer(api_key="mock_key")
+        """Gemini raising any exception + Groq disabled -> template fallback, no raise."""
+        explainer = LLMExplainer(api_key="mock_key", groq_api_key="")
         mock_client = MagicMock()
         mock_client.models.generate_content.side_effect = RuntimeError("API down")
-        explainer._client = mock_client
+        explainer._gemini_client = mock_client
 
         pd = make_policy_decision()
         result = explainer.explain(pd, make_shap_features(), "timeout", Decimal("2500"), "network_timeout")
@@ -116,13 +115,13 @@ class TestLLMExplainer:
         assert result.source == "template"
 
     def test_malformed_json_returns_template(self) -> None:
-        """LLM returning non-JSON → fallback."""
-        explainer = LLMExplainer(api_key="mock_key")
+        """Gemini returning non-JSON + Groq disabled -> template fallback."""
+        explainer = LLMExplainer(api_key="mock_key", groq_api_key="")
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "Not JSON at all"
         mock_client.models.generate_content.return_value = mock_response
-        explainer._client = mock_client
+        explainer._gemini_client = mock_client
 
         pd = make_policy_decision()
         result = explainer.explain(pd, make_shap_features(), "error", Decimal("500"), "do_not_honor")
@@ -130,13 +129,13 @@ class TestLLMExplainer:
         assert result.source == "template"
 
     def test_schema_validation_failure_returns_template(self) -> None:
-        """LLM returning JSON with missing fields → Pydantic rejects → fallback."""
-        explainer = LLMExplainer(api_key="mock_key")
+        """Gemini returning JSON with missing fields + Groq disabled -> Pydantic rejects -> template."""
+        explainer = LLMExplainer(api_key="mock_key", groq_api_key="")
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = '{"wrong_field": "wrong_value"}'
         mock_client.models.generate_content.return_value = mock_response
-        explainer._client = mock_client
+        explainer._gemini_client = mock_client
 
         pd = make_policy_decision()
         result = explainer.explain(pd, make_shap_features(), "error", Decimal("500"), "do_not_honor")
@@ -145,7 +144,7 @@ class TestLLMExplainer:
 
     def test_valid_gemini_response_returns_llm_source(self) -> None:
         """Valid Gemini SDK response → source='llm'."""
-        explainer = LLMExplainer(api_key="mock_key")
+        explainer = LLMExplainer(api_key="mock_key", groq_api_key="")
         mock_client = MagicMock()
         mock_response = MagicMock()
         valid_json = json.dumps({
@@ -155,7 +154,7 @@ class TestLLMExplainer:
         })
         mock_response.text = valid_json
         mock_client.models.generate_content.return_value = mock_response
-        explainer._client = mock_client
+        explainer._gemini_client = mock_client
 
         pd = make_policy_decision(RecoveryAction.RETRY_DELAYED)
         result = explainer.explain(pd, make_shap_features(), "insufficient funds", Decimal("3000"), "insufficient_funds")
