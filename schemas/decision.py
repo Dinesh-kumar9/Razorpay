@@ -12,6 +12,7 @@ The override is always logged with a rule ID and a plain-English reason.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -49,7 +50,7 @@ class SHAPFeature(BaseModel):
         description="Positive = pushes toward the recommended action; negative = away from it"
     )
     feature_value: str = Field(description="Human-readable display value, e.g. '42%' or 'card_blocked'")
-    direction: str = Field(description="'positive' or 'negative'")
+    direction: Literal["positive", "negative"] = Field(description="Direction of SHAP influence on the recommended action")
 
 
 class ModelDecision(BaseModel):
