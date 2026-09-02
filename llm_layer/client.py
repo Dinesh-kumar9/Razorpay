@@ -19,16 +19,11 @@ import logging
 import os
 from decimal import Decimal
 
-from dotenv import load_dotenv
-
-# Ensure .env is loaded before client instantiation.
-# override=False so that a shell-level GEMINI_API_KEY="" actually disables LLM calls.
-load_dotenv(override=False)
-
 from google import genai
 from google.genai import types
 from pydantic import ValidationError
 
+from config import get_settings
 from llm_layer.fallback import get_fallback_explanation
 from llm_layer.prompts import SYSTEM_PROMPT, build_user_prompt
 from schemas.decision import PolicyDecision, SHAPFeature
@@ -55,19 +50,22 @@ class LLMExplainer:
     """
 
     def __init__(self, api_key: str | None = None) -> None:
+        settings = get_settings()
         if api_key is None:
-            api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+            api_key = settings.gemini_api_key.strip()
 
         self._api_key = api_key
         self._has_key = bool(api_key)
+        self._client: genai.Client | None = None
 
         if self._has_key:
-            # Explicitly force Gemini Developer API (API-key mode), not Vertex AI
-            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+            # Set GOOGLE_GENAI_USE_VERTEXAI in the environment so the SDK
+            # uses Developer API (API-key mode) rather than defaulting to Vertex AI.
+            # This is a google-genai SDK initialisation requirement, not a config read.
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = str(settings.google_genai_use_vertexai).lower()
             self._client = genai.Client(api_key=api_key)
             logger.info("LLM explainer initialized with Google Gemini 2.5 Flash via google-genai SDK.")
         else:
-            self._client = None
             logger.info(
                 "GEMINI_API_KEY not set — LLM explainer will use template fallback for all decisions."
             )

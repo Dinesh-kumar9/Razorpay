@@ -19,7 +19,7 @@ import random
 from pathlib import Path
 
 import numpy as np
-import xgboost as xgb  # type: ignore[import]
+import xgboost as xgb
 
 from ingestion.generator import generate_transactions
 from risk_model.features import FeatureVector, extract_features

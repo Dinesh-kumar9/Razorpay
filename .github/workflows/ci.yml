@@ -77,7 +77,7 @@ jobs:
 
           txns = generate_transactions(500, 42)
           blind = run_blind_retry_baseline(txns, random.Random(1042))
-          multi = run_naive_multi_retry_baseline(txns, random.Random(2042))
+          multi = run_naive_multi_retry_baseline(txns, random.Random(1542))
 
           a = AuditLogger()
           recs = a.get_all_records()
@@ -105,7 +105,7 @@ jobs:
 
           txns = generate_transactions(500, 42)
           blind = run_blind_retry_baseline(txns, random.Random(1042))
-          multi = run_naive_multi_retry_baseline(txns, random.Random(2042))
+          multi = run_naive_multi_retry_baseline(txns, random.Random(1542))
 
           a = AuditLogger()
           recs = a.get_all_records()

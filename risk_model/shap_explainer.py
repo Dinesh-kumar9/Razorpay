@@ -12,8 +12,8 @@ from __future__ import annotations
 import logging
 
 import numpy as np
-import shap  # type: ignore[import]
-import xgboost as xgb  # type: ignore[import]
+import shap
+import xgboost as xgb
 
 from risk_model.features import FEATURE_NAMES, FeatureVector
 from schemas.decision import RecoveryAction, SHAPFeature

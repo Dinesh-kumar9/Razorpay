@@ -430,7 +430,8 @@ class TestDemoCase:
         assert decision.final_action == RecoveryAction.RETRY_DELAYED
         assert decision.was_overridden is True
         assert decision.guardrail_rule_id == "COOLDOWN_001"
-        assert "20.0 minutes" in decision.override_reason  # type: ignore[operator]
+        assert decision.override_reason is not None
+        assert "20.0 minutes" in decision.override_reason
 
     def test_demo_case_40_min_contact_does_not_trigger_cooldown(self) -> None:
         """
@@ -470,5 +471,6 @@ class TestDemoCase:
         assert policy_dec.final_action == RecoveryAction.ESCALATE_TO_HUMAN
         assert policy_dec.was_overridden is True
         assert policy_dec.guardrail_rule_id == "HARD_STOP_001"
-        assert "card_blocked" in policy_dec.override_reason  # type: ignore[operator]
-        assert "RBI" in policy_dec.override_reason  # type: ignore[operator]
+        assert policy_dec.override_reason is not None
+        assert "card_blocked" in policy_dec.override_reason
+        assert "RBI" in policy_dec.override_reason

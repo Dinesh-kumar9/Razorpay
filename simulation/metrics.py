@@ -50,8 +50,8 @@ def compute_metrics(
     if n == 0:
         raise ValueError("Cannot compute metrics on an empty record list.")
 
-    total_at_risk = sum(r.amount_inr for r in records)
-    total_recovered_agent = sum(r.amount_recovered_inr for r in records)
+    total_at_risk = sum((r.amount_inr for r in records), Decimal("0"))
+    total_recovered_agent = sum((r.amount_recovered_inr for r in records), Decimal("0"))
     recovery_rate_agent = float(total_recovered_agent / total_at_risk * 100) if total_at_risk else 0.0
 
     # Dual uplift: single-attempt (secondary) and realistic multi-retry (headline)
@@ -61,11 +61,12 @@ def compute_metrics(
     # Stopping-rule violations: hard-stop code processed WITHOUT escalation and NOT overridden
     # This would mean the policy engine missed a hard stop — must be 0.
     stopping_violations = sum(
-        1
+        bool(
+            r.failure_code in HARD_STOP_CODES
+            and r.final_action != RecoveryAction.ESCALATE_TO_HUMAN
+            and not r.was_overridden
+        )
         for r in records
-        if r.failure_code in HARD_STOP_CODES
-        and r.final_action != RecoveryAction.ESCALATE_TO_HUMAN
-        and not r.was_overridden
     )
 
     # Explanation coverage: MUST be 100% (fallback guarantees this)
@@ -83,12 +84,12 @@ def compute_metrics(
     false_escalation_rate = float(false_escalations / n * 100)
 
     # Override tracking
-    overrides = sum(1 for r in records if r.was_overridden)
+    overrides = sum(bool(r.was_overridden) for r in records)
     override_rate = float(overrides / n * 100)
 
     # LLM fallback tracking
     template_count = sum(
-        1 for r in records if r.explanation and r.explanation.source == "template"
+        bool(r.explanation and r.explanation.source == "template") for r in records
     )
     fallback_rate = float(template_count / n * 100)
 
