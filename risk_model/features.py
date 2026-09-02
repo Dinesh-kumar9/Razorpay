@@ -80,17 +80,23 @@ class FeatureVector:
     hour_of_day: float
 
     def to_list(self) -> list[float]:
-        """Return features in the canonical order defined by FEATURE_NAMES."""
-        return [
-            self.failure_code_category,
-            self.payment_method_risk,
-            self.retry_attempt_number,
-            self.amount_tier,
-            self.is_outside_business_hours,
-            self.contact_proximity_score,
-            self.is_subscription,
-            self.hour_of_day,
-        ]
+        """Return features in the canonical order defined by FEATURE_NAMES.
+
+        Deliberately derived from FEATURE_NAMES rather than dataclass field order:
+        a developer who reorders fields in the dataclass will not silently break the
+        model, because the output order is governed by FEATURE_NAMES, not declaration order.
+        """
+        mapping: dict[str, float] = {
+            "failure_code_category": self.failure_code_category,
+            "payment_method_risk": self.payment_method_risk,
+            "retry_attempt_number": self.retry_attempt_number,
+            "amount_tier": self.amount_tier,
+            "is_outside_business_hours": self.is_outside_business_hours,
+            "contact_proximity_score": self.contact_proximity_score,
+            "is_subscription": self.is_subscription,
+            "hour_of_day": self.hour_of_day,
+        }
+        return [mapping[name] for name in FEATURE_NAMES]
 
 
 def extract_features(txn: FailedTransaction) -> FeatureVector:
