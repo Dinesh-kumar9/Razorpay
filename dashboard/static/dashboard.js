@@ -1,172 +1,127 @@
 /**
- * Project Meridian Dashboard — Interactive Demo Logic
- *
- * Handles:
- *   - applyPreset(): sets form fields to known guardrail-triggering scenarios
- *   - runDemo(): submits a transaction through the full pipeline API
- *   - renderResult(): renders the AuditRecord response into the demo result area
- *
- * Guardrail rule reference (must match policy_engine/rules.py):
- *   HARD_STOP_001: failure_code in {card_blocked, fraud_flag, kyc_hold, stolen_card}
- *   HARD_STOP_002: failure_code in {card_expired, invalid_card} + retry action
- *   RATE_LIMIT_001: retry_count_so_far >= MAX_RETRIES (3)
- *   CONTACT_LIMIT_002: customer_contact_count_24h >= 1
- *   COOLDOWN_001: last_contact_time within 30 minutes
- *   WINDOW_001: time_of_failure outside 09:00–21:00 (TRAI DND: 21:00–09:00 IST)
+ * Project Meridian — Case-File Ledger Dashboard Client
+ * Renders decisions in 3 strict states: PROPOSED, OVERRIDDEN, CONFIRMED.
+ * Every decision element carries data-action, data-rule-id, and data-source attributes.
  */
 
-"use strict";
+var PRESETS = {
+  hard_stop: {
+    failure: "fraud_flag",
+    amount: 50000,
+    method: "card",
+    retryCount: 0,
+    lastContact: "",
+    hour: 14,
+    contactCount: 0,
+    desc: "HARD_STOP_001 — RBI fraud flag unconditionally forces human escalation",
+  },
+  rate_limit: {
+    failure: "insufficient_funds",
+    amount: 15000,
+    method: "card",
+    retryCount: 3,
+    lastContact: 120,
+    hour: 15,
+    contactCount: 1,
+    desc: "RATE_LIMIT_002 / RATE_LIMIT_001 — Contact cap prevents customer harassment",
+  },
+  cooldown: {
+    failure: "network_timeout",
+    amount: 5000,
+    method: "upi",
+    retryCount: 1,
+    lastContact: 15,
+    hour: 16,
+    contactCount: 0,
+    desc: "COOLDOWN_001 — Contacted 15 min ago, immediate retry blocked for 30m",
+  },
+  dnd_window: {
+    failure: "insufficient_funds",
+    amount: 25000,
+    method: "card",
+    retryCount: 0,
+    lastContact: "",
+    hour: 22,
+    contactCount: 0,
+    desc: "WINDOW_001 — 22:00 IST falls in TRAI DND quiet hours (21:00–09:00 IST)",
+  },
+  clean: {
+    failure: "card_expired",
+    amount: 25000,
+    method: "card",
+    retryCount: 0,
+    lastContact: "",
+    hour: 14,
+    contactCount: 0,
+    desc: "Clean transaction — Instrument expired, nudge alternative method cleanly",
+  },
+};
 
-/**
- * Apply a guardrail preset to the demo form fields.
- * @param {string} name - One of: hard_stop | rate_limit | cooldown | dnd_window | clean
- */
 function applyPreset(name) {
-  var presets = {
-    hard_stop: {
-      failure: "fraud_flag",
-      amount: 50000,
-      method: "card",
-      retryCount: 0,
-      contactMin: null,
-      hour: 14,
-      hint: "HARD_STOP_001 will fire — fraud_flag always → escalate_to_human regardless of model.",
-    },
-    rate_limit: {
-      failure: "insufficient_funds",
-      amount: 8000,
-      method: "upi",
-      retryCount: 3,
-      contactCount: 1,
-      contactMin: null,
-      hour: 14,
-      hint: "RATE_LIMIT_001 will fire (retry_count=3 ≥ MAX_RETRIES_PER_TXN). RATE_LIMIT_002 also fires (customer_contact_count_24h=1 ≥ 1).",
-    },
-    cooldown: {
-      failure: "network_timeout",
-      amount: 15000,
-      method: "card",
-      retryCount: 1,
-      contactCount: 0,
-      contactMin: 15,
-      hour: 14,
-      hint: "COOLDOWN_001 will fire — contacted 15 min ago, within the 30-min cooldown window.",
-    },
-    dnd_window: {
-      failure: "gateway_error",
-      amount: 5000,
-      method: "netbanking",
-      retryCount: 0,
-      contactCount: 0,
-      contactMin: null,
-      hour: 22,
-      hint: "WINDOW_001 will fire — 22:00 is inside the TRAI DND window (21:00–09:00 IST).",
-    },
-    clean: {
-      failure: "card_expired",
-      amount: 25000,
-      method: "card",
-      retryCount: 0,
-      contactCount: 0,
-      contactMin: null,
-      hour: 14,
-      hint: "No guardrail fires — card_expired with 0 retries, model chooses nudge_alt_method.",
-    },
-  };
-
-  var p = presets[name];
+  var p = PRESETS[name];
   if (!p) return;
 
-  setFieldValue("demo-failure", p.failure);
-  setFieldValue("demo-amount", p.amount);
-  setFieldValue("demo-method", p.method);
-  setFieldValue("demo-retry-count", p.retryCount);
-  setFieldValue("demo-contact-min", p.contactMin !== null ? p.contactMin : "");
-  setFieldValue("demo-hour", p.hour !== null ? p.hour : "");
-  // store contactCount on form element for runDemo to pick up
+  var fAmount = document.getElementById("demo-amount");
+  var fFailure = document.getElementById("demo-failure");
+  var fMethod = document.getElementById("demo-method");
+  var fRetry = document.getElementById("demo-retry-count");
+  var fContact = document.getElementById("demo-contact-min");
+  var fHour = document.getElementById("demo-hour");
   var form = document.getElementById("demo-form");
-  if (form) form.dataset.contactCount = p.contactCount !== undefined ? p.contactCount : 0;
 
-  // Show hint strip
-  var hint = document.getElementById("demo-preset-hint");
-  if (!hint) {
-    hint = document.createElement("div");
-    hint.id = "demo-preset-hint";
-    hint.className = "preset-hint";
-    var form = document.getElementById("demo-form");
-    form.parentNode.insertBefore(hint, form);
-  }
-  hint.textContent = "⬆ " + p.hint;
-  hint.style.display = "block";
+  if (fAmount) fAmount.value = p.amount;
+  if (fFailure) fFailure.value = p.failure;
+  if (fMethod) fMethod.value = p.method;
+  if (fRetry) fRetry.value = p.retryCount;
+  if (fContact) fContact.value = p.lastContact;
+  if (fHour) fHour.value = p.hour;
+  if (form) form.dataset.contactCount = p.contactCount;
 
-  // Highlight active preset button
-  document.querySelectorAll(".preset-btn").forEach(function (b) {
-    b.classList.remove("preset-btn--active");
+  document.querySelectorAll(".preset-button").forEach(function (btn) {
+    btn.classList.remove("preset-button--active");
   });
-  var clicked = document.querySelector('[onclick="applyPreset(\'' + name + '\')"]');
-  if (clicked) clicked.classList.add("preset-btn--active");
-}
+  var activeBtn = document.getElementById("btn-preset-" + name);
+  if (activeBtn) activeBtn.classList.add("preset-button--active");
 
-function setFieldValue(id, value) {
-  var el = document.getElementById(id);
-  if (el) el.value = value;
-}
-
-/**
- * Build an ISO-8601 timestamp for a given hour of day (today's date).
- * If hour is not provided, uses the current time.
- */
-function buildTimestamp(hour) {
-  var now = new Date();
-  if (hour !== null && hour !== "" && !isNaN(parseInt(hour, 10))) {
-    now.setHours(parseInt(hour, 10), 30, 0, 0);
+  var hint = document.getElementById("preset-hint");
+  if (hint) {
+    hint.textContent = p.desc;
   }
-  return now.toISOString();
 }
 
-/**
- * Build an ISO-8601 timestamp for last_contact_time, given minutes ago.
- * Returns null if contactMin is empty/null.
- */
-function buildLastContactTime(contactMin) {
-  if (contactMin === "" || contactMin === null) return null;
-  var min = parseInt(contactMin, 10);
-  if (isNaN(min)) return null;
-  var t = new Date(Date.now() - min * 60 * 1000);
-  return t.toISOString();
-}
-
-/**
- * Run a single transaction through the full agent pipeline via the API.
- * Reads all demo form fields, including guardrail-triggering fields.
- */
 async function runDemo() {
   var btn = document.getElementById("demo-run-btn");
   var result = document.getElementById("demo-result");
+  if (!btn || !result) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="data-value">Evaluating...</span>';
 
   var amount = parseFloat(document.getElementById("demo-amount").value) || 25000;
   var failure = document.getElementById("demo-failure").value;
   var method = document.getElementById("demo-method").value;
   var retryCount = parseInt(document.getElementById("demo-retry-count").value, 10) || 0;
-  var contactMin = document.getElementById("demo-contact-min").value;
+  var lastContactMin = document.getElementById("demo-contact-min").value;
   var hourVal = document.getElementById("demo-hour").value;
 
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Running pipeline&hellip;';
-  result.className = "demo-result demo-result--loading";
-  result.innerHTML =
-    '<div class="pipeline-steps">' +
-    '<span class="ps ps--done">&#x2713; Ingestion</span>' +
-    '<span class="ps ps--active">&#x21BB; Risk Model</span>' +
-    '<span class="ps ps--wait">&#x25CB; Policy Engine</span>' +
-    '<span class="ps ps--wait">&#x25CB; LLM Layer</span>' +
-    '<span class="ps ps--wait">&#x25CB; Audit</span>' +
-    "</div>";
+  var now = new Date();
+  var txnHour = hourVal !== "" ? parseInt(hourVal, 10) : now.getHours();
+  var timeOfFailure = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    txnHour,
+    0,
+    0
+  ).toISOString();
 
-  var txnId = "DEMO-" + Date.now();
-  var lastContact = buildLastContactTime(contactMin);
-  var timeOfFailure = buildTimestamp(hourVal);
+  var lastContact = null;
+  if (lastContactMin !== "") {
+    var min = parseInt(lastContactMin, 10);
+    lastContact = new Date(Date.now() - min * 60 * 1000).toISOString();
+  }
 
+  var txnId = "TXN-DEMO-" + Math.floor(Math.random() * 90000 + 10000);
   var form = document.getElementById("demo-form");
   var contactCount = form && form.dataset.contactCount !== undefined
     ? parseInt(form.dataset.contactCount, 10) || 0
@@ -187,21 +142,25 @@ async function runDemo() {
     is_subscription: false,
   };
 
-  var upd = function (doneIdx, nextActiveIdx) {
-    var steps = document.querySelectorAll(".ps");
-    if (steps[doneIdx]) {
-      steps[doneIdx].className = "ps ps--done";
-      steps[doneIdx].innerHTML =
-        "&#x2713; " + steps[doneIdx].textContent.replace(/^[✓⟳◯] /, "");
-    }
-    if (nextActiveIdx >= 0 && steps[nextActiveIdx]) {
-      steps[nextActiveIdx].className = "ps ps--active";
+  // Pipeline step visualizer animation
+  var updateStep = function (activeIdx) {
+    for (var i = 1; i <= 6; i++) {
+      var stepEl = document.getElementById("pipe-step-" + i);
+      if (stepEl) {
+        if (i < activeIdx) {
+          stepEl.className = "progress-step progress-step--done";
+        } else if (i === activeIdx) {
+          stepEl.className = "progress-step progress-step--active";
+        } else {
+          stepEl.className = "progress-step";
+        }
+      }
     }
   };
 
-  setTimeout(function () { upd(1, 2); }, 400);
-  setTimeout(function () { upd(2, 3); }, 800);
-  setTimeout(function () { upd(3, 4); }, 1100);
+  updateStep(2);
+  setTimeout(function () { updateStep(3); }, 300);
+  setTimeout(function () { updateStep(4); }, 650);
 
   try {
     var resp = await fetch("/api/simulate/single", {
@@ -211,73 +170,170 @@ async function runDemo() {
     });
     if (!resp.ok) throw new Error(await resp.text());
     var rec = await resp.json();
+
+    setTimeout(function () { updateStep(5); }, 900);
     setTimeout(function () {
-      upd(4, -1);
+      updateStep(6);
+      for (var i = 1; i <= 6; i++) {
+        var s = document.getElementById("pipe-step-" + i);
+        if (s) s.className = "progress-step progress-step--done";
+      }
       renderResult(result, rec);
       btn.disabled = false;
-      btn.innerHTML = '<span class="btn-icon">&#x25B6;</span> Run Again';
-    }, 1400);
-  } catch (e) {
-    result.className = "demo-result demo-result--error";
-    result.innerHTML = "<strong>Error:</strong> " + e.message;
+      btn.innerHTML = '<span class="btn-symbol">▶</span> Execute Ingestion Case';
+    }, 1200);
+  } catch (err) {
+    result.className = "case-file";
+    result.innerHTML =
+      '<div class="case-body" style="border:1px solid var(--color-overridden);color:var(--color-paper);">' +
+      '<strong class="mono" style="color:var(--color-overridden)">EXECUTION ERROR:</strong> ' +
+      escapeHtml(err.message) +
+      "</div>";
     btn.disabled = false;
-    btn.innerHTML = '<span class="btn-icon">&#x25B6;</span> Run Agent';
+    btn.innerHTML = '<span class="btn-symbol">▶</span> Execute Ingestion Case';
   }
 }
 
 /**
- * Render the AuditRecord API response into the demo result panel.
- * Highlights guardrail overrides prominently — this is the pitch moment.
+ * Render the decision strictly into one of three states:
+ * 1. PROPOSED: model candidate (grey dashed border)
+ * 2. OVERRIDDEN: struck out proposal + solid red final + rule ID (solid red border)
+ * 3. CONFIRMED: solid slate-green border
  */
-function renderResult(el, rec) {
+function renderResult(container, rec) {
+  var wasOverridden = !!rec.was_overridden;
+  var modelAction = (rec.model_action || "UNKNOWN").toUpperCase();
+  var finalAction = (rec.final_action || "UNKNOWN").toUpperCase();
+  var ruleId = rec.guardrail_rule_id || "";
+  var reason = rec.override_reason || "";
   var recovered = rec.simulated_outcome && rec.simulated_outcome.recovered;
-  var amt = parseFloat(
+  var recoveredAmt = parseFloat(
     (rec.simulated_outcome && rec.simulated_outcome.amount_recovered_inr) || 0
   );
-  var action = rec.final_action || "";
-  var cm = {
-    retry_now: "action-badge--retry-now",
-    retry_delayed: "action-badge--retry-delayed",
-    stop: "action-badge--stop",
-    escalate_to_human: "action-badge--escalate-to-human",
-    nudge_alt_method: "action-badge--nudge-alt-method",
-  };
 
-  var overrideBanner = "";
-  if (rec.was_overridden) {
-    overrideBanner =
-      '<div class="demo-override-pill demo-override-pill--prominent">' +
-      "&#x1F6E1;&#xFE0F; <strong>Guardrail fired:</strong> <code>" +
-      rec.guardrail_rule_id +
-      "</code>" +
-      '<div class="override-reason">' + (rec.override_reason || "") + "</div>" +
-      "</div>";
+  var decisionMarkup = "";
+  if (wasOverridden) {
+    decisionMarkup =
+      '<div class="decision-block is-overridden" ' +
+      'data-action="' + escapeHtml(finalAction) + '" ' +
+      'data-rule-id="' + escapeHtml(ruleId) + '" ' +
+      'data-source="policy">' +
+      '<span class="decision-state-tag">Guardrail Override:</span> ' +
+      '<del class="action-struck" data-action="' + escapeHtml(modelAction) + '" data-source="model">' +
+      escapeHtml(modelAction) +
+      '</del> ' +
+      '<span class="action-enforced" data-action="' + escapeHtml(finalAction) + '" data-source="policy">' +
+      escapeHtml(finalAction) +
+      '</span> ' +
+      '<span class="rule-pill mono" data-rule-id="' + escapeHtml(ruleId) + '">' +
+      escapeHtml(ruleId) +
+      '</span>' +
+      '</div>';
+  } else {
+    decisionMarkup =
+      '<div class="decision-block is-confirmed" ' +
+      'data-action="' + escapeHtml(finalAction) + '" ' +
+      'data-source="policy">' +
+      '<span class="confirmed-tag">Confirmed:</span> ' +
+      '<span class="action-confirmed-name" data-action="' + escapeHtml(finalAction) + '" data-source="policy">' +
+      escapeHtml(finalAction) +
+      '</span>' +
+      '</div>';
   }
 
-  el.className = "demo-result demo-result--show";
-  el.innerHTML =
-    '<div class="demo-result-grid">' +
-    '<div class="demo-result-main">' +
-    '<div class="demo-result-label">Final Action</div>' +
-    '<span class="action-badge action-badge--lg ' + (cm[action] || "") + '">' +
-    action.replace(/_/g, " ").toUpperCase() +
-    "</span>" +
+  var overrideBanner = "";
+  if (wasOverridden) {
+    overrideBanner =
+      '<div class="override-alert-banner" role="alert" aria-live="polite">' +
+      '<div class="override-alert-header">' +
+      '<span class="rule-pill mono" data-rule-id="' + escapeHtml(ruleId) + '">' + escapeHtml(ruleId) + '</span>' +
+      '<span class="override-alert-title">Statutory Policy Engine Veto Applied</span>' +
+      '</div>' +
+      '<div class="override-alert-reason">' + escapeHtml(reason) + '</div>' +
+      '</div>';
+  }
+
+  var outcomeMarkup = recovered
+    ? '<span class="data-value" style="color:var(--color-confirmed);font-weight:600;">✓ RECOVERED ₹' +
+      recoveredAmt.toLocaleString("en-IN", { maximumFractionDigits: 0 }) +
+      '</span>'
+    : '<span class="data-value" style="color:var(--color-paper-muted);">✗ NOT RECOVERED THIS ATTEMPT</span>';
+
+  var rationale = rec.explanation && rec.explanation.rationale ? rec.explanation.rationale : "Deterministic policy rationale recorded.";
+  var caveat = rec.explanation && rec.explanation.confidence_caveat ? rec.explanation.confidence_caveat : "";
+  var fallbackIfWrong = rec.explanation && rec.explanation.fallback_if_wrong ? rec.explanation.fallback_if_wrong : "";
+
+  container.className = "case-file";
+  container.innerHTML =
+    '<header class="case-header">' +
+    '<h3 class="case-title"><span class="case-seq mono">DOSSIER #' + escapeHtml(rec.txn_id) + '</span> Execution Result</h3>' +
+    '<span class="data-value text-muted timestamp">' + new Date().toISOString() + '</span>' +
+    '</header>' +
+    '<div class="case-body">' +
     overrideBanner +
-    '<div class="demo-outcome ' + (recovered ? "outcome-recovered" : "outcome-failed") + '">' +
-    (recovered
-      ? "&#x2705; Recovered &#x20B9;" +
-        amt.toLocaleString("en-IN", { maximumFractionDigits: 0 })
-      : "&#x274C; Not recovered this attempt") +
-    "</div></div>" +
-    '<div class="demo-result-explanation">' +
-    '<div class="demo-result-label">Agent Explanation</div>' +
-    '<div class="demo-explanation-text">' +
-    (rec.explanation && rec.explanation.rationale ? rec.explanation.rationale : "&mdash;") +
-    "</div>" +
-    '<div class="demo-caveat">' +
-    (rec.explanation && rec.explanation.confidence_caveat ? rec.explanation.confidence_caveat : "") +
-    "</div></div></div>" +
-    '<a href="/transaction/' +
-    rec.txn_id +
-    '" class="btn btn--outline btn--sm" target="_blank">View Full Audit Record &#x2197;</a>';
+    '<div class="pipeline-sequence">' +
+
+    // Stage 1
+    '<section class="pipeline-stage">' +
+    '<div class="stage-meta"><span class="stage-number">1</span><h4 class="stage-title">Ingestion Event</h4></div>' +
+    '<dl class="dossier-grid">' +
+    '<div class="dossier-item"><dt>Transaction ID</dt><dd class="mono txn-id">' + escapeHtml(rec.txn_id) + '</dd></div>' +
+    '<div class="dossier-item"><dt>Amount at Risk</dt><dd class="mono">₹' + parseFloat(rec.amount_inr).toLocaleString("en-IN") + '</dd></div>' +
+    '<div class="dossier-item"><dt>Failure Code</dt><dd class="mono">' + escapeHtml(rec.failure_code) + '</dd></div>' +
+    '<div class="dossier-item"><dt>Payment Rail</dt><dd class="mono">' + escapeHtml(rec.payment_method) + '</dd></div>' +
+    '</dl>' +
+    '</section>' +
+
+    // Stage 2
+    '<section class="pipeline-stage">' +
+    '<div class="stage-meta"><span class="stage-number">2</span><h4 class="stage-title">Risk Model Inference</h4><span class="stage-role-tag role--ml">XGBoost Uplift</span></div>' +
+    '<div class="decision-block decision-state--proposed" data-action="' + escapeHtml(modelAction) + '" data-source="model">' +
+    '<span class="decision-state-tag">Model Proposed:</span> ' +
+    '<strong class="mono">' + escapeHtml(modelAction) + '</strong> ' +
+    '<span class="mono text-muted">(Confidence: ' + Math.round((rec.model_confidence || 0) * 100) + '%)</span>' +
+    '</div>' +
+    '</section>' +
+
+    // Stage 3 & 4
+    '<section class="pipeline-stage">' +
+    '<div class="stage-meta"><span class="stage-number">3·4</span><h4 class="stage-title">Policy Engine &amp; Guardrails</h4><span class="stage-role-tag role--veto">Veto Authority</span></div>' +
+    decisionMarkup +
+    '</section>' +
+
+    // Stage 5
+    '<section class="pipeline-stage">' +
+    '<div class="stage-meta"><span class="stage-number">5</span><h4 class="stage-title">Explanation Layer</h4><span class="stage-role-tag role--advisory">Advisory Only</span></div>' +
+    '<article class="advisory-block" data-source="llm">' +
+    '<div class="advisory-header">' +
+    '<span class="advisory-title">Gemini 2.5 Flash Advisory Dossier</span>' +
+    '<span class="advisory-disclaimer">Advisory only — not a decision</span>' +
+    '</div>' +
+    '<p class="advisory-prose">' + escapeHtml(rationale) + '</p>' +
+    (caveat ? '<div class="advisory-caveat mono"><strong>Caveat:</strong> ' + escapeHtml(caveat) + '</div>' : '') +
+    (fallbackIfWrong ? '<div class="advisory-fallback mono"><strong>Contingency:</strong> ' + escapeHtml(fallbackIfWrong) + '</div>' : '') +
+    '</article>' +
+    '</section>' +
+
+    // Stage 6
+    '<section class="pipeline-stage">' +
+    '<div class="stage-meta"><span class="stage-number">6</span><h4 class="stage-title">Settlement &amp; Audit Trail</h4></div>' +
+    '<dl class="dossier-grid">' +
+    '<div class="dossier-item"><dt>Settlement Outcome</dt><dd>' + outcomeMarkup + '</dd></div>' +
+    '<div class="dossier-item"><dt>Recovery Probability Used</dt><dd class="mono">' + Math.round(((rec.simulated_outcome && rec.simulated_outcome.recovery_probability_used) || 0) * 100) + '%</dd></div>' +
+    '<div class="dossier-item"><dt>Audit Record</dt><dd><a href="/transaction/' + escapeHtml(rec.txn_id) + '" class="mono" style="color:var(--color-paper);text-decoration:underline;">Inspect Full Ledger Entry →</a></dd></div>' +
+    '</dl>' +
+    '</section>' +
+
+    '</div>' +
+    '</div>';
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

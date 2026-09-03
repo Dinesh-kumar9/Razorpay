@@ -1,65 +1,75 @@
-<div class="table-meta">
-  Showing {{ rows | length }} of {{ total }} transactions
-  {% if total_pages > 1 %} · Page {{ page }} of {{ total_pages }}{% endif %}
+<div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--color-hairline); display:flex; justify-content:space-between; align-items:center;" class="mono text-sm text-muted">
+  <span>Displaying {{ rows | length }} of {{ total }} records</span>
+  {% if total_pages > 1 %}<span>Page {{ page }} of {{ total_pages }}</span>{% endif %}
 </div>
 
-<div class="table-wrapper">
-  <table class="txn-table" id="transactions-table">
+<div style="overflow-x:auto;">
+  <table class="audit-ledger-table" id="transactions-table">
     <thead>
       <tr>
-        <th>Txn ID</th>
+        <th>Txn Reference</th>
         <th>Amount</th>
-        <th>Failure Code</th>
-        <th>Method</th>
-        <th>Model Said</th>
-        <th>Final Action</th>
-        <th>Override?</th>
-        <th>Recovered?</th>
-        <th></th>
+        <th>Failure Reason</th>
+        <th>Rail</th>
+        <th>Proposed (ML)</th>
+        <th>Final Decision &amp; Guardrail Veto</th>
+        <th>Settlement</th>
+        <th>Dossier</th>
       </tr>
     </thead>
     <tbody>
       {% for row in rows %}
-      <tr class="txn-row {% if row.was_overridden %}txn-row--overridden{% endif %}" id="row-{{ row.txn_id }}">
+      <tr id="row-{{ row.txn_id }}">
         <td class="mono text-sm">{{ row.txn_id }}</td>
-        <td>₹{{ "{:,.0f}".format(row.amount_inr | float) }}</td>
+        <td class="mono">₹{{ "{:,.0f}".format(row.amount_inr | float) }}</td>
         <td>
-          <span class="code-pill code-pill--{{ 'danger' if row.failure_code in ['card_blocked','fraud_flag','kyc_hold','stolen_card'] else 'warning' if row.failure_code in ['card_expired','invalid_card','card_limit_exceeded'] else 'info' }}">
+          <span class="mono" style="font-size:0.75rem;padding:0.15rem 0.4rem;border:1px solid var(--color-hairline);border-radius:var(--radius-sm);color:var(--color-paper-muted);">
             {{ row.failure_code }}
           </span>
         </td>
-        <td>{{ row.payment_method }}</td>
+        <td class="mono text-sm">{{ row.payment_method }}</td>
         <td>
-          <span class="action-badge action-badge--{{ row.model_action | replace('_','-') }}">
-            {{ row.model_action }}
+          <!-- State 1: PROPOSED -->
+          <span class="decision-block decision-state--proposed" data-action="{{ row.model_action | upper }}" data-source="model">
+            {{ row.model_action | upper }}
           </span>
         </td>
         <td>
-          <span class="action-badge action-badge--{{ row.final_action | replace('_','-') }}">
-            {{ row.final_action }}
-          </span>
-        </td>
-        <td class="text-center">
           {% if row.was_overridden %}
-            <span class="override-badge" title="{{ row.guardrail_rule_id }}">⚡ {{ row.guardrail_rule_id }}</span>
+          <!-- State 2: OVERRIDDEN -->
+          <div class="decision-block is-overridden"
+               data-action="{{ row.final_action | upper }}"
+               data-rule-id="{{ row.guardrail_rule_id }}"
+               data-source="policy">
+            <del class="action-struck" data-action="{{ row.model_action | upper }}" data-source="model">{{ row.model_action | upper }}</del>
+            <span class="action-enforced" data-action="{{ row.final_action | upper }}" data-source="policy">{{ row.final_action | upper }}</span>
+            <span class="rule-pill mono" data-rule-id="{{ row.guardrail_rule_id }}">{{ row.guardrail_rule_id }}</span>
+          </div>
           {% else %}
-            <span class="text-muted">—</span>
-          {% endif %}
-        </td>
-        <td class="text-center">
-          {% if row.recovered %}
-            <span class="recovered-yes">✅</span>
-          {% else %}
-            <span class="recovered-no">❌</span>
+          <!-- State 3: CONFIRMED -->
+          <div class="decision-block is-confirmed"
+               data-action="{{ row.final_action | upper }}"
+               data-source="policy">
+            <span class="action-confirmed-name" data-action="{{ row.final_action | upper }}" data-source="policy">{{ row.final_action | upper }}</span>
+          </div>
           {% endif %}
         </td>
         <td>
-          <a href="/transaction/{{ row.txn_id }}" class="detail-link">View →</a>
+          {% if row.recovered %}
+            <span class="mono" style="color:var(--color-confirmed);font-weight:600;">✓ RECOVERED</span>
+          {% else %}
+            <span class="mono" style="color:var(--color-paper-muted);">✗ UNRECOVERED</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="/transaction/{{ row.txn_id }}" class="mono" style="color:var(--color-paper);font-size:0.82rem;text-decoration:underline;">Inspect →</a>
         </td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="9" class="empty-table-msg">No transactions match this filter.</td>
+        <td colspan="8" style="padding:2.5rem;text-align:center;color:var(--color-paper-muted);" class="mono">
+          No audit records matched this filter specification.
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -67,23 +77,27 @@
 </div>
 
 {% if total_pages > 1 %}
-<div class="pagination">
+<div style="padding:1rem 1.25rem;border-top:1px solid var(--color-hairline);display:flex;justify-content:space-between;align-items:center;">
   {% if page > 1 %}
-    <button class="page-btn"
+    <button type="button" class="filter-pill"
       hx-get="/htmx/transactions?filter={{ filter }}&page={{ page - 1 }}"
       hx-target="#txn-table-container"
       hx-swap="innerHTML">
-      ← Prev
+      &larr; Previous Page
     </button>
+  {% else %}
+    <div></div>
   {% endif %}
-  <span class="page-info">{{ page }} / {{ total_pages }}</span>
+  <span class="mono text-sm text-muted">Page {{ page }} of {{ total_pages }}</span>
   {% if page < total_pages %}
-    <button class="page-btn"
+    <button type="button" class="filter-pill"
       hx-get="/htmx/transactions?filter={{ filter }}&page={{ page + 1 }}"
       hx-target="#txn-table-container"
       hx-swap="innerHTML">
-      Next →
+      Next Page &rarr;
     </button>
+  {% else %}
+    <div></div>
   {% endif %}
 </div>
 {% endif %}

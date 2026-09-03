@@ -3,34 +3,47 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}Project Meridian{% endblock %} — AI Revenue Recovery</title>
-  <meta name="description" content="Bounded AI agent for failed-payment recovery. Recovers revenue intelligently with full audit trail and compliance guardrails." />
+  <title>{% block title %}Case Ledger{% endblock %} — Project Meridian</title>
+  <meta name="description" content="Project Meridian: Bounded AI Revenue Recovery Pipeline with statutory guardrail enforcement." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
-<body>
-  <nav class="navbar">
-    <div class="nav-brand">
-      <span class="brand-icon">◈</span>
-      <span class="brand-name">Project <strong>Meridian</strong></span>
-      <span class="brand-tag">AI Revenue Recovery</span>
+<body class="ledger-body">
+  <header class="ledger-header" role="banner">
+    <div class="header-content">
+      <div class="header-masthead">
+        <span class="masthead-symbol" aria-hidden="true">◈</span>
+        <div class="masthead-text">
+          <span class="masthead-org">Razorpay Buildathon · Autonomous Recovery</span>
+          <a href="/" class="masthead-title">Project Meridian</a>
+        </div>
+      </div>
+      <nav class="ledger-nav" role="navigation" aria-label="Main Navigation">
+        <ul class="nav-list">
+          <li><a href="/" class="nav-item {% if request.url.path == '/' %}nav-item--active{% endif %}">Ledger Summary</a></li>
+          <li><a href="/transactions" class="nav-item {% if request.url.path == '/transactions' %}nav-item--active{% endif %}">Audit Trail</a></li>
+          <li><a href="/docs" class="nav-item" target="_blank" rel="noopener noreferrer">Schema &amp; API ↗</a></li>
+        </ul>
+      </nav>
     </div>
-    <ul class="nav-links">
-      <li><a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Dashboard</a></li>
-      <li><a href="/transactions" class="nav-link {% if request.url.path == '/transactions' %}active{% endif %}">Transactions</a></li>
-      <li><a href="/docs" class="nav-link" target="_blank">API Docs ↗</a></li>
-    </ul>
-  </nav>
+  </header>
 
-  <main class="main-content">
+  <main class="ledger-main" role="main">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="footer">
-    <span>Razorpay AI Buildathon · Track 3 · The LLM never touches money or state — it only touches language.</span>
+  <footer class="ledger-footer" role="contentinfo">
+    <div class="footer-content">
+      <p class="footer-invariant">
+        <strong>Architectural Invariant:</strong> The LLM never touches money or state — it only touches language.
+      </p>
+      <p class="footer-meta mono">
+        6-Stage Pipeline · Bounded Policy Engine · Statutory Compliance Veto
+      </p>
+    </div>
   </footer>
 </body>
 </html>

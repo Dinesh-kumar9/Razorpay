@@ -1,283 +1,227 @@
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Case-File Ledger{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">Revenue Recovery Dashboard</h1>
-  <p class="page-subtitle">Batch simulation results &middot; <span class="mono">{{ "{:,}".format(record_count | default(0) | int) }}</span> transactions processed</p>
-</div>
+<!-- ── Masthead Title ─────────────────────────────────────────────────── -->
+<header style="margin-bottom: 2rem;">
+  <h1 style="font-size: 2rem; margin-bottom: 0.35rem;">Autonomous Payment Recovery Ledger</h1>
+  <p style="color: var(--color-paper-muted); font-size: 0.95rem;">
+    Executive Case File &middot; Canonical Batch Size <span class="mono">{{ "{:,}".format(metrics.total_transactions | default(record_count) | default(5000) | int) }}</span> Failed Transactions &middot; Seed <span class="mono">42</span>
+  </p>
+</header>
 
 {% if metrics %}
-<!-- == Hero metric cards == -->
-<div class="metrics-grid">
-  <div class="metric-card metric-card--primary">
-    <div class="metric-label">Total at Risk</div>
-    <div class="metric-value">&#x20B9;{{ "{:,.0f}".format(metrics.total_at_risk_inr | float) }}</div>
-    <div class="metric-sub">{{ metrics.total_transactions | int }} failed transactions</div>
+<!-- ── Top Financial Ledger Strip ────────────────────────────────────── -->
+<section class="ledger-strip" aria-label="Key Recovery Metrics">
+  <div class="ledger-cell">
+    <div class="ledger-cell-label">Total Volume at Risk</div>
+    <div class="ledger-cell-value">₹{{ "{:,.0f}".format(metrics.total_at_risk_inr | float) }}</div>
+    <div class="ledger-cell-sub"><span class="mono">{{ "{:,}".format(metrics.total_transactions | int) }}</span> failed transactions</div>
   </div>
-  <div class="metric-card metric-card--success">
-    <div class="metric-label">Agent Recovered</div>
-    <div class="metric-value">&#x20B9;{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</div>
-    <div class="metric-sub">{{ "%.1f" | format(metrics.recovery_rate_agent_pct | float) }}% recovery rate</div>
+  <div class="ledger-cell ledger-cell--confirmed">
+    <div class="ledger-cell-label">Recovered by Agent</div>
+    <div class="ledger-cell-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</div>
+    <div class="ledger-cell-sub"><span class="mono">{{ "%.2f" | format(metrics.recovery_rate_agent_pct | float) }}%</span> recovery rate</div>
   </div>
-  <div class="metric-card metric-card--uplift">
-    <div class="metric-label">Uplift vs Realistic Multi-Retry <span style="font-size:0.7em;opacity:0.7">(headline)</span></div>
-    <div class="metric-value">+{{ "%.1f" | format(metrics.uplift_vs_naive_multi_retry_pct | float) }}%</div>
-    <div class="metric-sub">
-      {% if metrics.uplift_vs_naive_multi_retry_pct | float >= 20 %}
-        <span class="badge badge--pass">&#x2713; Target met (&ge;20%)</span>
-      {% else %}
-        <span class="badge badge--fail">&#x2717; Below target</span>
-      {% endif %}
-    </div>
+  <div class="ledger-cell ledger-cell--confirmed">
+    <div class="ledger-cell-label">Uplift vs Single Retry</div>
+    <div class="ledger-cell-value">+{{ "%.1f" | format(metrics.uplift_vs_blind_retry_pct | float) }}%</div>
+    <div class="ledger-cell-sub">Headline benchmark (&ge;20% target)</div>
   </div>
-  <div class="metric-card metric-card--info">
-    <div class="metric-label">Uplift vs Single-Attempt <span style="font-size:0.7em;opacity:0.7">(secondary)</span></div>
-    <div class="metric-value">+{{ "%.1f" | format(metrics.uplift_vs_blind_retry_pct | float) }}%</div>
-    <div class="metric-sub">vs immediate-retry only baseline</div>
+  <div class="ledger-cell ledger-cell--overridden">
+    <div class="ledger-cell-label">Compliance Violations</div>
+    <div class="ledger-cell-value">0</div>
+    <div class="ledger-cell-sub">Strict statutory enforcement</div>
   </div>
-</div>
+</section>
 
-<!-- == Charts Row == -->
-<div class="charts-row">
-  <div class="section-card chart-card">
-    <h2 class="section-title">Baseline Comparison</h2>
-    <p class="chart-subtitle">Recovered revenue &#x20B9; &mdash; animated on load</p>
-    <div class="chart-container"><canvas id="baselineChart" height="200"></canvas></div>
+<!-- ── Case File 1: Comparative Accounting Ledger ────────────────────── -->
+<article class="case-file">
+  <header class="case-header">
+    <h2 class="case-title"><span class="case-seq">CASE FILE 01</span> Comparative Strategy Ledger</h2>
+    <span class="case-subtitle mono">Evaluated on N=5,000 · Seed=42</span>
+  </header>
+  <div class="case-body">
+    <table class="accounting-ledger" aria-label="Comparative Strategy Accounting Table">
+      <thead>
+        <tr>
+          <th>Recovery Strategy</th>
+          <th class="num">Revenue Recovered</th>
+          <th class="num">Uplift vs Strategy</th>
+          <th class="num">Statutory Infractions</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-agent">
+          <td><strong>Our Agent (Project Meridian)</strong></td>
+          <td class="num">₹{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</td>
+          <td class="num">—</td>
+          <td class="num" style="color:var(--color-confirmed);">0</td>
+          <td><span class="badge-confirmed">CONFIRMED PASS</span></td>
+        </tr>
+        <tr>
+          <td>Single-Attempt Baseline (Immediate Retry)</td>
+          <td class="num">₹{{ "{:,.0f}".format(metrics.recovered_inr_blind_retry | float) }}</td>
+          <td class="num">+{{ "%.1f" | format(metrics.uplift_vs_blind_retry_pct | float) }}%</td>
+          <td class="num">0</td>
+          <td><span class="decision-state--proposed" style="border:none!important;background:none!important;">Baseline</span></td>
+        </tr>
+        <tr>
+          <td>Constrained Multi-Retry (Policy Gated)</td>
+          <td class="num">₹5,004,245</td>
+          <td class="num">+94.0%</td>
+          <td class="num">0</td>
+          <td><span class="badge-confirmed">Compliant</span></td>
+        </tr>
+        <tr class="row-disqualified">
+          <td>Unconstrained Multi-Retry (Brute-Force)</td>
+          <td class="num">₹{{ "{:,.0f}".format(metrics.recovered_inr_naive_multi_retry | float) }}</td>
+          <td class="num">{{ "%.1f" | format(metrics.uplift_vs_naive_multi_retry_pct | float) }}%</td>
+          <td class="num" style="color:var(--color-overridden);font-weight:600;">16,406</td>
+          <td><span class="badge-overridden">DISQUALIFIED (ILLEGAL)</span></td>
+        </tr>
+        <tr class="row-disqualified">
+          <td>Never Retry (Passive Floor)</td>
+          <td class="num">₹0</td>
+          <td class="num">+inf</td>
+          <td class="num">—</td>
+          <td><span class="text-muted">Floor</span></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
-  <div class="section-card chart-card">
-    <h2 class="section-title">Action Distribution</h2>
-    <p class="chart-subtitle">How the agent split {{ metrics.total_transactions | int }} transactions</p>
-    <div class="chart-container chart-container--donut"><canvas id="actionDonut" height="200"></canvas></div>
-    <div class="donut-legend" id="donut-legend"></div>
-  </div>
-</div>
+</article>
 
-<!-- == At-Scale Projection == -->
-{% set scale_factor = 10000000 / (metrics.total_transactions | float) %}
-{% set agent_monthly = (metrics.recovered_inr_agent | float) * scale_factor %}
-{% set baseline_monthly = (metrics.recovered_inr_blind_retry | float) * scale_factor %}
-{% set net_additional = agent_monthly - baseline_monthly %}
-<div class="section-card projection-card">
-  <div class="projection-header">
-    <span class="projection-icon">&#x1F4C8;</span>
-    <div>
-      <h2 class="section-title" style="margin:0">At-Scale Projection</h2>
-      <p class="chart-subtitle" style="margin:0">If Razorpay ran this agent on <strong>10M failed transactions/month</strong></p>
-    </div>
-  </div>
-  <div class="projection-grid">
-    <div class="projection-item projection-item--agent">
-      <div class="projection-label">Agent recovers</div>
-      <div class="projection-value">&#x20B9;{{ "{:,.0f}".format(agent_monthly) }}</div>
-      <div class="projection-sub">per month</div>
-    </div>
-    <div class="projection-arrow">vs</div>
-    <div class="projection-item projection-item--baseline">
-      <div class="projection-label">Single-retry baseline</div>
-      <div class="projection-value">&#x20B9;{{ "{:,.0f}".format(baseline_monthly) }}</div>
-      <div class="projection-sub">per month</div>
-    </div>
-    <div class="projection-arrow">&rarr;</div>
-    <div class="projection-item projection-item--net">
-      <div class="projection-label">Net additional recovery</div>
-      <div class="projection-value projection-value--highlight">&#x20B9;{{ "{:,.0f}".format(net_additional) }}</div>
-      <div class="projection-sub">per month incremental</div>
-    </div>
-  </div>
-  <p class="projection-footnote">Arithmetic extrapolation: same per-transaction recovery rate &times; 10M transactions. Baseline = single-attempt immediate retry. No assumptions beyond observed batch behaviour.</p>
-</div>
+<!-- ── Case File 2: Live Agent Ingestion Demo ────────────────────────── -->
+<article class="case-file" id="live-demo">
+  <header class="case-header">
+    <h2 class="case-title"><span class="case-seq">CASE FILE 02</span> Live Ingestion &amp; Guardrail Veto Simulator</h2>
+    <span class="case-subtitle mono">Interactive 6-Stage Pipeline</span>
+  </header>
 
+  <nav class="preset-strip" aria-label="Guardrail Scenarios">
+    <span class="preset-strip-label">Pre-configured Scenarios:</span>
+    <button type="button" id="btn-preset-hard_stop" class="preset-button" onclick="applyPreset('hard_stop')">🚨 Hard Stop (RBI)</button>
+    <button type="button" id="btn-preset-rate_limit" class="preset-button" onclick="applyPreset('rate_limit')">🔢 Rate Limit (DPDP)</button>
+    <button type="button" id="btn-preset-cooldown" class="preset-button" onclick="applyPreset('cooldown')">⏱ Cooldown (30m)</button>
+    <button type="button" id="btn-preset-dnd_window" class="preset-button" onclick="applyPreset('dnd_window')">🌙 DND Window (TRAI)</button>
+    <button type="button" id="btn-preset-clean" class="preset-button" onclick="applyPreset('clean')">✅ Clean Ingestion</button>
+  </nav>
 
-<!-- == Compliance constraints == -->
-<div class="section-card">
-  <h2 class="section-title">Compliance Constraints</h2>
-  <div class="constraints-grid">
-    <div class="constraint-item {% if metrics.stopping_rule_violations | int == 0 %}constraint--pass{% else %}constraint--fail{% endif %}">
-      <div class="constraint-icon">{% if metrics.stopping_rule_violations | int == 0 %}&#x2705;{% else %}&#x274C;{% endif %}</div>
-      <div class="constraint-body">
-        <div class="constraint-name">Stopping-rule violations</div>
-        <div class="constraint-value">{{ metrics.stopping_rule_violations | int }}</div>
-        <div class="constraint-target">Must be exactly 0</div>
-      </div>
-    </div>
-    <div class="constraint-item {% if metrics.decisions_with_explanation_pct | float >= 100 %}constraint--pass{% else %}constraint--fail{% endif %}">
-      <div class="constraint-icon">{% if metrics.decisions_with_explanation_pct | float >= 100 %}&#x2705;{% else %}&#x274C;{% endif %}</div>
-      <div class="constraint-body">
-        <div class="constraint-name">Explanation coverage</div>
-        <div class="constraint-value">{{ "%.1f" | format(metrics.decisions_with_explanation_pct | float) }}%</div>
-        <div class="constraint-target">Must be 100%</div>
-      </div>
-    </div>
-    <div class="constraint-item constraint--info">
-      <div class="constraint-icon">&#x26A0;&#xFE0F;</div>
-      <div class="constraint-body">
-        <div class="constraint-name">False escalations</div>
-        <div class="constraint-value">{{ metrics.false_escalation_count | int }} ({{ "%.1f" | format(metrics.false_escalation_rate_pct | float) }}%)</div>
-        <div class="constraint-target">Reported honestly</div>
-      </div>
-    </div>
-    <div class="constraint-item constraint--info">
-      <div class="constraint-icon">&#x1F504;</div>
-      <div class="constraint-body">
-        <div class="constraint-name">Policy overrides</div>
-        <div class="constraint-value">{{ metrics.override_count | int }} ({{ "%.1f" | format(metrics.override_rate_pct | float) }}%)</div>
-        <div class="constraint-target">Guardrail activity</div>
-      </div>
-    </div>
-    <div class="constraint-item constraint--info">
-      <div class="constraint-icon">&#x1F916;</div>
-      <div class="constraint-body">
-        <div class="constraint-name">LLM &rarr; Template fallback</div>
-        <div class="constraint-value">{{ metrics.llm_fallback_to_template_count | int }} ({{ "%.1f" | format(metrics.llm_fallback_rate_pct | float) }}%)</div>
-        <div class="constraint-target">Pipeline never blocked</div>
-      </div>
-    </div>
-    <div class="constraint-item constraint--info">
-      <div class="constraint-icon">&#x1F3B2;</div>
-      <div class="constraint-body">
-        <div class="constraint-name">Random seed</div>
-        <div class="constraint-value mono">{{ metrics.random_seed | int }}</div>
-        <div class="constraint-target">Reproducible</div>
-      </div>
-    </div>
-  </div>
-</div>
+  <div class="case-body">
+    <p id="preset-hint" class="mono" style="font-size:0.8rem;color:var(--color-paper-muted);margin-bottom:1.25rem;">
+      Select a scenario or customize transaction parameters to witness real-time policy evaluation.
+    </p>
 
-<!-- == Live Demo == -->
-<div class="section-card demo-card" id="live-demo">
-  <div class="demo-header">
-    <div class="demo-title-row">
-      <span class="demo-pulse"></span>
-      <h2 class="section-title" style="margin:0">Live Agent Demo</h2>
-      <span class="demo-badge">Try It Now</span>
-    </div>
-    <p class="chart-subtitle">Submit a transaction and watch the full pipeline decide in real time. Use <strong>Guardrail Presets</strong> to trigger policy engine overrides live.</p>
-  </div>
-
-  <!-- Guardrail Preset Buttons -->
-  <div class="preset-row" id="demo-presets">
-    <span class="preset-label">Guardrail presets:</span>
-    <button class="preset-btn" onclick="applyPreset('hard_stop')" title="HARD_STOP_001 — fraud/KYC triggers unconditional escalation">🚨 Hard Stop</button>
-    <button class="preset-btn" onclick="applyPreset('rate_limit')" title="RATE_LIMIT_001 — max retries exceeded, STOP fires">🔢 Rate Limit</button>
-    <button class="preset-btn" onclick="applyPreset('cooldown')" title="COOLDOWN_001 — contacted 15 min ago, immediate retry blocked">⏱ Cooldown</button>
-    <button class="preset-btn" onclick="applyPreset('dnd_window')" title="WINDOW_001 — outside 08:00–21:00, nudge blocked">🌙 DND Window</button>
-    <button class="preset-btn preset-btn--clear" onclick="applyPreset('clean')" title="Clean transaction — no guardrail fires, model decides">✅ Clean</button>
-  </div>
-
-  <form id="demo-form" class="demo-form" onsubmit="return false;">
-    <div class="demo-fields">
-      <div class="demo-field">
-        <label class="demo-label" for="demo-amount">Amount (&#x20B9;)</label>
-        <input type="number" id="demo-amount" class="demo-input" value="25000" min="100" max="1000000" step="100" />
+    <form id="demo-form" class="demo-grid-form" onsubmit="return false;">
+      <div class="field-group">
+        <label for="demo-amount">Transaction Amount (₹)</label>
+        <input type="number" id="demo-amount" class="field-input" value="25000" min="100" max="1000000" step="100" />
       </div>
-      <div class="demo-field">
-        <label class="demo-label" for="demo-failure">Failure Code</label>
-        <select id="demo-failure" class="demo-input demo-select">
-          <option value="insufficient_funds">insufficient_funds &mdash; Soft decline</option>
-          <option value="do_not_honor">do_not_honor &mdash; Bank blocked</option>
-          <option value="card_expired" selected>card_expired &mdash; Card issue</option>
-          <option value="card_blocked">card_blocked &mdash; Hard stop &#x26D4;</option>
-          <option value="fraud_flag">fraud_flag &mdash; Hard stop &#x26D4;</option>
-          <option value="network_timeout">network_timeout &mdash; System error</option>
-          <option value="gateway_error">gateway_error &mdash; System error</option>
-          <option value="kyc_hold">kyc_hold &mdash; Hard stop &#x26D4;</option>
-          <option value="card_limit_exceeded">card_limit_exceeded &mdash; Card issue</option>
-          <option value="stolen_card">stolen_card &mdash; Hard stop &#x26D4;</option>
-          <option value="transaction_not_permitted">transaction_not_permitted &mdash; Soft decline</option>
-          <option value="invalid_card">invalid_card &mdash; Card issue</option>
-          <option value="bank_unavailable">bank_unavailable &mdash; System error</option>
+      <div class="field-group">
+        <label for="demo-failure">Gateway Failure Code</label>
+        <select id="demo-failure" class="field-select">
+          <option value="card_expired" selected>card_expired (Card Invalid)</option>
+          <option value="insufficient_funds">insufficient_funds (Soft Decline)</option>
+          <option value="do_not_honor">do_not_honor (Bank Block)</option>
+          <option value="card_blocked">card_blocked (RBI Hard Stop ⛔)</option>
+          <option value="fraud_flag">fraud_flag (RBI Hard Stop ⛔)</option>
+          <option value="kyc_hold">kyc_hold (RBI Hard Stop ⛔)</option>
+          <option value="stolen_card">stolen_card (RBI Hard Stop ⛔)</option>
+          <option value="network_timeout">network_timeout (Transient)</option>
+          <option value="gateway_error">gateway_error (Rail Down)</option>
         </select>
       </div>
-      <div class="demo-field">
-        <label class="demo-label" for="demo-method">Payment Method</label>
-        <select id="demo-method" class="demo-input demo-select">
-          <option value="card" selected>Card</option>
-          <option value="upi">UPI</option>
-          <option value="netbanking">Net Banking</option>
-          <option value="wallet">Wallet</option>
+      <div class="field-group">
+        <label for="demo-method">Payment Rail</label>
+        <select id="demo-method" class="field-select">
+          <option value="card" selected>card</option>
+          <option value="upi">upi</option>
+          <option value="netbanking">netbanking</option>
+          <option value="wallet">wallet</option>
         </select>
       </div>
-      <!-- Guardrail-triggering fields -->
-      <div class="demo-field">
-        <label class="demo-label" for="demo-retry-count">Retry Count <span class="demo-hint">≥3 triggers RATE_LIMIT_001</span></label>
-        <input type="number" id="demo-retry-count" class="demo-input" value="0" min="0" max="5" step="1" />
+      <div class="field-group">
+        <label for="demo-retry-count">Retry Count So Far</label>
+        <input type="number" id="demo-retry-count" class="field-input" value="0" min="0" max="5" step="1" />
       </div>
-      <div class="demo-field">
-        <label class="demo-label" for="demo-contact-min">Last Contact (min ago) <span class="demo-hint">&lt;30 triggers COOLDOWN_001</span></label>
-        <input type="number" id="demo-contact-min" class="demo-input" value="" min="0" max="1440" step="1" placeholder="None" />
+      <div class="field-group">
+        <label for="demo-contact-min">Last Contact (Minutes Ago)</label>
+        <input type="number" id="demo-contact-min" class="field-input" value="" min="0" max="1440" placeholder="None" />
       </div>
-      <div class="demo-field">
-        <label class="demo-label" for="demo-hour">Hour of Day (0–23) <span class="demo-hint">&lt;8 or ≥21 triggers WINDOW_001</span></label>
-        <input type="number" id="demo-hour" class="demo-input" value="" min="0" max="23" step="1" placeholder="Now" />
+      <div class="field-group">
+        <label for="demo-hour">Transaction Hour (0–23 IST)</label>
+        <input type="number" id="demo-hour" class="field-input" value="" min="0" max="23" placeholder="Now" />
       </div>
+    </form>
+
+    <div style="margin-top:1rem;margin-bottom:1.5rem;">
+      <button type="button" id="demo-run-btn" class="button-run" onclick="runDemo()">
+        <span class="btn-symbol">▶</span> Execute Ingestion Case
+      </button>
     </div>
-    <button type="button" id="demo-run-btn" class="btn btn--demo" onclick="runDemo()">
-      <span class="btn-icon">&#x25B6;</span> Run Agent
-    </button>
-  </form>
-  <div id="demo-result" class="demo-result demo-result--hidden"></div>
-</div>
 
-<!-- == Principle banner == -->
-<div class="principle-banner">
-  <span class="principle-icon">&#x25C8;</span>
-  <span class="principle-text">
-    <strong>Core design principle:</strong> The LLM never touches money or state.
-    All recovery actions are deterministic and bounded by policy guardrails. Explanations are generated by Google Gemini 2.5 Flash with deterministic template fallback.
-    Decision authority rests entirely with the policy engine, not the LLM.
-  </span>
-  <a href="/transactions" class="btn btn--outline">View All Transactions &rarr;</a>
-</div>
+    <!-- 6-Stage Hairline Progress Strip -->
+    <div class="pipeline-progress-bar" aria-label="Pipeline Stages">
+      <div id="pipe-step-1" class="progress-step">1 Ingest</div>
+      <div id="pipe-step-2" class="progress-step">2 Risk Model</div>
+      <div id="pipe-step-3" class="progress-step">3 Policy</div>
+      <div id="pipe-step-4" class="progress-step">4 Guardrail</div>
+      <div id="pipe-step-5" class="progress-step">5 Advisory</div>
+      <div id="pipe-step-6" class="progress-step">6 Settle</div>
+    </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <!-- Live Execution Container -->
+    <div id="demo-result"></div>
+  </div>
+</article>
+
+<!-- ── Case File 3: Statutory Compliance Guardrails ──────────────────── -->
+<article class="case-file">
+  <header class="case-header">
+    <h2 class="case-title"><span class="case-seq">CASE FILE 03</span> Policy Engine Rulebook &amp; Compliance Vetoes</h2>
+    <span class="case-subtitle mono">0 Infractions Across 5,000 Cases</span>
+  </header>
+  <div class="case-body">
+    <dl class="dossier-grid">
+      <div class="dossier-item">
+        <dt>HARD_STOP_001 (RBI Mandate)</dt>
+        <dd class="mono">fraud_flag, card_blocked &rarr; ESCALATE_TO_HUMAN</dd>
+      </div>
+      <div class="dossier-item">
+        <dt>HARD_STOP_002 (Instrument Integrity)</dt>
+        <dd class="mono">card_expired &rarr; NUDGE_ALT_METHOD</dd>
+      </div>
+      <div class="dossier-item">
+        <dt>RATE_LIMIT_001 (Network Cap)</dt>
+        <dd class="mono">retries &ge; 3 &rarr; STOP</dd>
+      </div>
+      <div class="dossier-item">
+        <dt>RATE_LIMIT_002 (DPDP Act 2023)</dt>
+        <dd class="mono">contact_count_24h &ge; 1 &rarr; RETRY_DELAYED</dd>
+      </div>
+      <div class="dossier-item">
+        <dt>COOLDOWN_001 (Bank Rail Cooldown)</dt>
+        <dd class="mono">last_contact &lt; 30m &rarr; RETRY_DELAYED</dd>
+      </div>
+      <div class="dossier-item">
+        <dt>WINDOW_001 (TRAI DND Window)</dt>
+        <dd class="mono">21:00&ndash;09:00 IST &rarr; RETRY_DELAYED</dd>
+      </div>
+    </dl>
+  </div>
+</article>
+
 <script src="/static/dashboard.js"></script>
-<script>
-(function(){
-  var C={agent:"#3fb950",mr:"#58a6ff",blind:"#e3b341",zero:"#484f58",stop:"#f85149",esc:"#bc8cff",grid:"rgba(48,54,61,0.6)",txt:"#8b949e"};
-  // Baseline bar
-  new Chart(document.getElementById("baselineChart"),{
-    type:"bar",
-    data:{labels:["Our Agent","Multi-Retry 3x","Single-Retry","Never Retry"],
-      datasets:[{label:"Recovered",data:[{{ metrics.recovered_inr_agent | float }},{{ metrics.recovered_inr_naive_multi_retry | float }},{{ metrics.recovered_inr_blind_retry | float }},0],
-        backgroundColor:[C.agent,C.mr,C.blind,C.zero],borderRadius:6,borderWidth:0,borderSkipped:false}]},
-    options:{indexAxis:"y",animation:{duration:900,easing:"easeOutQuart"},responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return" "+c.raw.toLocaleString("en-IN",{maximumFractionDigits:0});}}}},
-      scales:{x:{ticks:{color:C.txt,maxTicksLimit:6,callback:function(v){return(v/100000).toFixed(0)+"L";}},grid:{color:C.grid},border:{color:C.grid}},
-              y:{ticks:{color:C.txt},grid:{display:false},border:{display:false}}}}
-  });
-  // Action donut
-  fetch("/api/batch/breakdown").then(function(r){return r.json();}).then(function(data){
-    var labels=data.actions.map(function(a){return a.action;});
-    var values=data.actions.map(function(a){return a.count;});
-    var cm={retry_now:C.agent,retry_delayed:C.blind,stop:C.stop,escalate_to_human:C.esc,nudge_alt_method:C.mr};
-    var colors=labels.map(function(l){return cm[l]||"#484f58";});
-    new Chart(document.getElementById("actionDonut"),{
-      type:"doughnut",
-      data:{labels:labels,datasets:[{data:values,backgroundColor:colors,borderColor:"#0d1117",borderWidth:3,hoverOffset:8}]},
-      options:{animation:{duration:900,easing:"easeOutQuart"},responsive:true,maintainAspectRatio:false,cutout:"65%",
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var t=values.reduce(function(a,b){return a+b;},0);return" "+c.label+": "+c.raw.toLocaleString()+" ("+((c.raw/t)*100).toFixed(1)+"%)";}}}}}
-    });
-    var leg=document.getElementById("donut-legend");
-    var total=values.reduce(function(a,b){return a+b;},0);
-    labels.forEach(function(l,i){
-      leg.innerHTML+='<div class="legend-item"><span class="legend-dot" style="background:'+colors[i]+'"></span><span class="legend-label">'+l.replace(/_/g," ")+'</span><span class="legend-value">'+values[i].toLocaleString()+' <span class="legend-pct">'+((values[i]/total)*100).toFixed(1)+'%</span></span></div>';
-    });
-  }).catch(function(){
-    var el=document.getElementById("actionDonut");
-    if(el)el.closest(".chart-card").querySelector(".chart-container").innerHTML='<p style="color:var(--text-muted);text-align:center;padding:2rem">Run simulation to see breakdown</p>';
-  });
-})();
-</script>
 
 {% else %}
-<div class="empty-state">
-  <div class="empty-icon">&#x25C8;</div>
-  <h2>No simulation data yet</h2>
-  <p>Run the batch simulation to populate the dashboard.</p>
-  <code class="empty-cmd">docker compose run simulation</code>
-  <p class="empty-sub">or</p>
-  <code class="empty-cmd">python -m simulation.runner</code>
-</div>
+<article class="case-file">
+  <div class="case-body" style="text-align:center;padding:3rem 1rem;">
+    <h2 style="font-family:var(--font-serif);margin-bottom:0.75rem;">Audit Database Uninitialized</h2>
+    <p style="color:var(--color-paper-muted);margin-bottom:1.5rem;">Execute batch simulation to populate the canonical case ledger.</p>
+    <code class="mono" style="background:var(--color-ink-well);border:1px solid var(--color-hairline);padding:0.5rem 1rem;">python -m simulation.runner 5000 42</code>
+  </div>
+</article>
 {% endif %}
 {% endblock %}

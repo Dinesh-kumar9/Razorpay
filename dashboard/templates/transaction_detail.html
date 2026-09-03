@@ -1,153 +1,219 @@
 {% extends "base.html" %}
-{% block title %}{{ txn_id }}{% endblock %}
+{% block title %}Dossier {{ txn_id }}{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <a href="/transactions" class="back-link">&larr; All Transactions</a>
-  <h1 class="page-title mono">{{ txn_id }}</h1>
+<div style="margin-bottom: 1.5rem;">
+  <a href="/transactions" class="mono" style="color:var(--color-paper-muted);text-decoration:none;font-size:0.85rem;">&larr; Back to Audit Ledger</a>
+  <h1 style="font-size: 1.85rem; margin-top: 0.5rem;" class="mono">{{ txn_id }}</h1>
+  <p style="color: var(--color-paper-muted); font-size: 0.88rem;">
+    Immutable Audit Dossier &middot; Logged timestamp <span class="mono">{{ record.timestamp if record else 'N/A' }}</span>
+  </p>
 </div>
 
 {% if record %}
-<div class="detail-grid">
+<article class="case-file">
+  <header class="case-header">
+    <h2 class="case-title"><span class="case-seq">CASE RECORD</span> 6-Stage Lifecycle Sequence</h2>
+    <span class="case-subtitle mono">Recorded by SQLite Audit Trail</span>
+  </header>
 
-  <!-- Decision chain card -->
-  <div class="detail-card detail-card--full">
-    <h2 class="card-title">Decision Chain</h2>
-    <div class="decision-chain">
-      <div class="chain-step">
-        <div class="chain-label">Model Recommended</div>
-        <span class="action-badge action-badge--lg action-badge--{{ record.model_action | replace('_','-') }}">
-          {{ record.model_action }}
-        </span>
-        <div class="chain-sub">Confidence: {{ "%.0f" | format(record.model_confidence * 100) }}%</div>
+  <div class="case-body">
+    <!-- Optional Guardrail Override Alert Banner -->
+    {% if record.was_overridden %}
+    <div class="override-alert-banner" role="alert" aria-live="polite">
+      <div class="override-alert-header">
+        <span class="rule-pill mono" data-rule-id="{{ record.guardrail_rule_id }}">{{ record.guardrail_rule_id }}</span>
+        <span class="override-alert-title">Statutory Policy Engine Veto Fired</span>
       </div>
-      <div class="chain-arrow">
-        {% if record.was_overridden %}&rarr; <span class="override-label">GUARDRAIL FIRED</span> &rarr;{% else %}&rarr;{% endif %}
-      </div>
-      <div class="chain-step">
-        <div class="chain-label">Final Action</div>
-        <span class="action-badge action-badge--lg action-badge--{{ record.final_action | replace('_','-') }}">
-          {{ record.final_action }}
-        </span>
+      <div class="override-alert-reason">{{ record.override_reason }}</div>
+    </div>
+    {% endif %}
+
+    <div class="pipeline-sequence">
+
+      <!-- Stage 1: Ingestion Dossier -->
+      <section class="pipeline-stage">
+        <div class="stage-meta">
+          <span class="stage-number">1</span>
+          <h3 class="stage-title">Ingestion Event &amp; Transaction Dossier</h3>
+        </div>
+        <dl class="dossier-grid">
+          <div class="dossier-item">
+            <dt>Transaction Amount</dt>
+            <dd class="mono">₹{{ "{:,.2f}".format(record.amount_inr | float) }}</dd>
+          </div>
+          <div class="dossier-item">
+            <dt>Failure Code</dt>
+            <dd class="mono">{{ record.failure_code }}</dd>
+          </div>
+          <div class="dossier-item">
+            <dt>Payment Method</dt>
+            <dd class="mono">{{ record.payment_method }}</dd>
+          </div>
+          <div class="dossier-item">
+            <dt>Customer Reference</dt>
+            <dd class="mono">{{ record.customer_id }}</dd>
+          </div>
+          <div class="dossier-item">
+            <dt>Merchant Reference</dt>
+            <dd class="mono">{{ record.merchant_id }}</dd>
+          </div>
+          <div class="dossier-item">
+            <dt>Ingestion Timestamp</dt>
+            <dd class="mono text-sm">{{ record.timestamp }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- Stage 2: Risk Model Inference & Attribution -->
+      <section class="pipeline-stage">
+        <div class="stage-meta">
+          <span class="stage-number">2</span>
+          <h3 class="stage-title">Risk Model Inference &amp; SHAP Feature Attributions</h3>
+          <span class="stage-role-tag role--ml">XGBoost Uplift</span>
+        </div>
+
+        <div style="margin-bottom: 1.25rem;">
+          <span class="decision-block decision-state--proposed" data-action="{{ record.model_action }}" data-source="model">
+            <span class="decision-state-tag">Candidate Proposed:</span>
+            <strong class="mono">{{ record.model_action | upper }}</strong>
+            <span class="mono text-muted">(P(Recovery) Confidence: {{ "%.0f" | format(record.model_confidence * 100) }}%)</span>
+          </span>
+        </div>
+
+        {% if record.shap_top_features %}
+        <div style="margin-top: 1rem;">
+          <div style="font-family:var(--font-mono);font-size:0.72rem;text-transform:uppercase;color:var(--color-paper-muted);margin-bottom:0.5rem;letter-spacing:0.05em;">
+            Top Mathematical Drivers of Predicted Risk:
+          </div>
+          {% set max_shap = record.shap_top_features | map(attribute='shap_value') | map('abs') | max %}
+          {% for feat in record.shap_top_features %}
+          {% set bar_pct = ((feat.shap_value | abs) / (max_shap if max_shap > 0 else 1) * 100) | int %}
+          {% set is_pos = feat.shap_value > 0 %}
+          <div class="shap-ledger-row">
+            <span class="shap-feature-title mono">{{ feat.feature_name }}</span>
+            <div class="shap-track">
+              <div class="{% if is_pos %}shap-fill-pos{% else %}shap-fill-neg{% endif %}" style="width:{{ bar_pct }}%;"></div>
+            </div>
+            <span class="shap-val mono">{% if is_pos %}+{% endif %}{{ "%.4f" | format(feat.shap_value) }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </section>
+
+      <!-- Stage 3 & 4: Policy Engine & Guardrail Veto Evaluation -->
+      <section class="pipeline-stage">
+        <div class="stage-meta">
+          <span class="stage-number">3·4</span>
+          <h3 class="stage-title">Policy Engine &amp; Statutory Guardrail Veto</h3>
+          <span class="stage-role-tag role--veto">Veto Authority</span>
+        </div>
+
         {% if record.was_overridden %}
-        <div class="chain-override">
-          <span class="rule-id guardrail-flash">{{ record.guardrail_rule_id }}</span>
-          <p class="override-reason">{{ record.override_reason }}</p>
-          {% if record.guardrail_rule_id %}
-          <div class="guardrail-regulation">
-            {% if 'HARD_STOP_001' in record.guardrail_rule_id %}&#x1F4CC; RBI Circular: fraud &amp; risk flags must be escalated to human review.
-            {% elif 'HARD_STOP_002' in record.guardrail_rule_id %}&#x1F4CC; Instrument-level fix required — retry is physically impossible.
-            {% elif 'RATE_LIMIT_001' in record.guardrail_rule_id %}&#x1F4CC; Retry cap: 3 attempts. Further retries violate internal SLA.
-            {% elif 'RATE_LIMIT_002' in record.guardrail_rule_id %}&#x1F4CC; DPDP Act: max 1 contact per 24h for nudge communications.
-            {% elif 'COOLDOWN_001' in record.guardrail_rule_id %}&#x1F4CC; Cooldown: retry_now blocked within 30 min of last attempt.
-            {% elif 'WINDOW_001' in record.guardrail_rule_id %}&#x1F4CC; TRAI DND: nudge communications restricted to 08:00&ndash;21:00.
-            {% endif %}
+        <!-- State 2: OVERRIDDEN -->
+        <div class="decision-block is-overridden"
+             data-action="{{ record.final_action | upper }}"
+             data-rule-id="{{ record.guardrail_rule_id }}"
+             data-source="policy">
+          <span class="decision-state-tag">Guardrail Override:</span>
+          <del class="action-struck" data-action="{{ record.model_action | upper }}" data-source="model">{{ record.model_action | upper }}</del>
+          <span class="action-enforced" data-action="{{ record.final_action | upper }}" data-source="policy">{{ record.final_action | upper }}</span>
+          <span class="rule-pill mono" data-rule-id="{{ record.guardrail_rule_id }}">{{ record.guardrail_rule_id }}</span>
+        </div>
+        <p style="margin-top:0.75rem;font-size:0.88rem;color:var(--color-paper-muted);">
+          Triggered by rule <strong class="mono" style="color:var(--color-overridden)">{{ record.guardrail_rule_id }}</strong>: {{ record.override_reason }}
+        </p>
+        {% else %}
+        <!-- State 3: CONFIRMED -->
+        <div class="decision-block is-confirmed"
+             data-action="{{ record.final_action | upper }}"
+             data-source="policy">
+          <span class="confirmed-tag">Confirmed:</span>
+          <span class="action-confirmed-name" data-action="{{ record.final_action | upper }}" data-source="policy">{{ record.final_action | upper }}</span>
+        </div>
+        <p style="margin-top:0.75rem;font-size:0.88rem;color:var(--color-paper-muted);">
+          All statutory guardrail checks passed without veto. Proposed model action approved for execution.
+        </p>
+        {% endif %}
+      </section>
+
+      <!-- Stage 5: Advisory LLM Explanation Layer -->
+      <section class="pipeline-stage">
+        <div class="stage-meta">
+          <span class="stage-number">5</span>
+          <h3 class="stage-title">Advisory Explanation Layer</h3>
+          <span class="stage-role-tag role--advisory">Advisory Only</span>
+        </div>
+
+        {% if record.explanation %}
+        <article class="advisory-block" data-source="llm">
+          <div class="advisory-header">
+            <span class="advisory-title mono">
+              {% if record.explanation.source == 'template' %}
+              Deterministic Template Fallback Dossier
+              {% else %}
+              Gemini 2.5 Flash Advisory Dossier
+              {% endif %}
+            </span>
+            <span class="advisory-disclaimer">Advisory only — not a decision</span>
+          </div>
+          <p class="advisory-prose">{{ record.explanation.rationale }}</p>
+          {% if record.explanation.confidence_caveat %}
+          <div class="advisory-caveat mono">
+            <strong>Confidence Caveat:</strong> {{ record.explanation.confidence_caveat }}
           </div>
           {% endif %}
-        </div>
-        {% endif %}
-      </div>
-      <div class="chain-arrow">&rarr;</div>
-      <div class="chain-step">
-        <div class="chain-label">Outcome</div>
-        {% if record.simulated_outcome.recovered %}
-          <div class="outcome-recovered">&#x2705; Recovered</div>
-          <div class="outcome-amount">&#x20B9;{{ "{:,.0f}".format(record.simulated_outcome.amount_recovered_inr | float) }}</div>
-        {% else %}
-          <div class="outcome-failed">&#x274C; Not recovered</div>
-          <div class="outcome-amount">&#x20B9;0</div>
-        {% endif %}
-        <div class="chain-sub">P(recover) used: {{ "%.0f" | format(record.simulated_outcome.recovery_probability_used * 100) }}%</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Transaction details -->
-  <div class="detail-card">
-    <h2 class="card-title">Transaction Details</h2>
-    <dl class="detail-list">
-      <dt>Amount</dt><dd>&#x20B9;{{ "{:,.2f}".format(record.amount_inr | float) }}</dd>
-      <dt>Failure Code</dt>
-      <dd>
-        <span class="code-pill code-pill--{{ 'danger' if record.failure_code in ['card_blocked','fraud_flag','kyc_hold','stolen_card'] else 'warning' if record.failure_code in ['card_expired','invalid_card'] else 'info' }}">
-          {{ record.failure_code }}
-        </span>
-      </dd>
-      <dt>Payment Method</dt><dd>{{ record.payment_method }}</dd>
-      <dt>Customer ID</dt><dd class="mono">{{ record.customer_id }}</dd>
-      <dt>Merchant ID</dt><dd class="mono">{{ record.merchant_id }}</dd>
-      <dt>Timestamp</dt><dd class="mono text-sm">{{ record.timestamp }}</dd>
-    </dl>
-  </div>
-
-  <!-- SHAP Feature Importance -->
-  <div class="detail-card">
-    <h2 class="card-title">SHAP Feature Importance <span class="card-title-sub">Why this risk score?</span></h2>
-    {% if record.shap_top_features %}
-    <div class="shap-chart">
-      {% set max_shap = record.shap_top_features | map(attribute='shap_value') | map('abs') | max %}
-      {% for feat in record.shap_top_features | sort(attribute='shap_value', reverse=True) %}
-      {% set bar_pct = ((feat.shap_value | abs) / max_shap * 100) | int %}
-      {% set is_pos = feat.shap_value > 0 %}
-      <div class="shap-row">
-        <div class="shap-feature-name">{{ feat.feature_name | replace('_',' ') }}</div>
-        <div class="shap-bar-container">
-          {% if is_pos %}
-            <div class="shap-bar shap-bar--positive" style="width:{{ bar_pct }}%">
-              <span class="shap-value-label">+{{ "%.4f" | format(feat.shap_value) }}</span>
-            </div>
-          {% else %}
-            <div class="shap-bar shap-bar--negative" style="width:{{ bar_pct }}%">
-              <span class="shap-value-label">{{ "%.4f" | format(feat.shap_value) }}</span>
-            </div>
+          {% if record.explanation.fallback_if_wrong %}
+          <div class="advisory-fallback mono">
+            <strong>Contingency Plan:</strong> {{ record.explanation.fallback_if_wrong }}
+          </div>
           {% endif %}
+        </article>
+        {% else %}
+        <p class="mono text-muted">No explanation generated for this record.</p>
+        {% endif %}
+      </section>
+
+      <!-- Stage 6: Settlement & Outcome Execution -->
+      <section class="pipeline-stage">
+        <div class="stage-meta">
+          <span class="stage-number">6</span>
+          <h3 class="stage-title">Settlement Outcome &amp; Immutable Audit Record</h3>
         </div>
-        <div class="shap-feature-value mono">{{ feat.feature_value }}</div>
-      </div>
-      {% endfor %}
-      <div class="shap-legend">
-        <span class="shap-legend-item"><span class="shap-legend-dot shap-legend-dot--pos"></span>Increases risk (pushes toward escalation/stop)</span>
-        <span class="shap-legend-item"><span class="shap-legend-dot shap-legend-dot--neg"></span>Decreases risk (pushes toward retry)</span>
-      </div>
-    </div>
-    {% else %}
-    <p class="text-muted" style="padding:1rem 0">No SHAP data available for this record.</p>
-    {% endif %}
-  </div>
+        <dl class="dossier-grid">
+          <div class="dossier-item">
+            <dt>Recovery Outcome</dt>
+            <dd>
+              {% if record.simulated_outcome.recovered %}
+              <span class="mono" style="color:var(--color-confirmed);font-weight:600;">✓ RECOVERED ₹{{ "{:,.0f}".format(record.simulated_outcome.amount_recovered_inr | float) }}</span>
+              {% else %}
+              <span class="mono" style="color:var(--color-paper-muted);">✗ NOT RECOVERED</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div class="dossier-item">
+            <dt>Simulated Recovery Probability</dt>
+            <dd class="mono">{{ "%.0f" | format(record.simulated_outcome.recovery_probability_used * 100) }}%</dd>
+          </div>
+          <div class="dossier-item">
+            <dt>Audit Integrity</dt>
+            <dd class="mono text-sm" style="color:var(--color-confirmed);">APPEND-ONLY SQLITE RECORD</dd>
+          </div>
+        </dl>
+      </section>
 
-  <!-- LLM Explanation -->
-  <div class="detail-card">
-    <h2 class="card-title">
-      Agent Explanation
-      {% if record.explanation.source == 'template' %}
-        <span class="source-badge source-badge--template">template fallback</span>
-      {% else %}
-        <span class="source-badge source-badge--llm">Google Gemini 2.5 Flash</span>
-      {% endif %}
-    </h2>
-    <div class="explanation-block">
-      <div class="explanation-section">
-        <div class="explanation-label">Why this action</div>
-        <p class="explanation-text">{{ record.explanation.rationale }}</p>
-      </div>
-      <div class="explanation-section">
-        <div class="explanation-label">Confidence caveat</div>
-        <p class="explanation-text text-amber">{{ record.explanation.confidence_caveat }}</p>
-      </div>
-      <div class="explanation-section">
-        <div class="explanation-label">If this action fails</div>
-        <p class="explanation-text text-muted">{{ record.explanation.fallback_if_wrong }}</p>
-      </div>
     </div>
   </div>
-
-</div>
+</article>
 
 {% else %}
-<div class="empty-state">
-  <h2>Transaction not found</h2>
-  <p>No audit record exists for <span class="mono">{{ txn_id }}</span>.</p>
-  <a href="/transactions" class="btn btn--outline">Back to transactions</a>
-</div>
+<article class="case-file">
+  <div class="case-body" style="text-align:center;padding:3rem 1rem;">
+    <h2>Dossier Not Found</h2>
+    <p style="color:var(--color-paper-muted);margin:1rem 0;">No audit entry exists for transaction <span class="mono">{{ txn_id }}</span>.</p>
+    <a href="/transactions" class="mono" style="color:var(--color-paper);text-decoration:underline;">Return to Audit Ledger</a>
+  </div>
+</article>
 {% endif %}
 {% endblock %}
