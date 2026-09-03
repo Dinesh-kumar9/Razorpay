@@ -62,6 +62,12 @@ HTMX Dashboard (FastAPI + Jinja2)
 > **Reproducible.** Run `python -m simulation.runner` with seed=42 to get identical numbers.
 > The CI `reproducibility` job verifies this on every push by running twice and diffing output.
 
+> **Note on LLM Fallback Rate (100% in Batch Simulation):**
+> In the 5,000-transaction batch simulation and CI, all explanations are generated via the deterministic template fallback (llm_fallback_rate_pct: 100.0%). This is by design:
+> 1. **Rate limits:** Google Gemini free tier enforces a strict 15 Requests Per Minute (RPM) cap; firing 5,000 live API calls sequentially would take >5.5 hours and trigger upstream 429 RESOURCE_EXHAUSTED.
+> 2. **Financial determinism:** The LLM is strictly advisory and never touches money or state. Every recovery decision, revenue outcome, and compliance check is identical whether using live Gemini or template fallback.
+> 3. **Live calls:** Live Gemini 3.6 Flash generation is used for interactive single-transaction evaluations via the web dashboard (/api/simulate/single).
+
 ---
 
 ## Quick Start
