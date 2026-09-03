@@ -125,6 +125,7 @@ def run_batch(
     n: int = DEFAULT_BATCH_SIZE,
     seed: int = DEFAULT_SEED,
     db_path: Path = DEFAULT_DB_PATH,
+    explainer: LLMExplainer | None = None,
 ) -> BatchMetrics:
     """
     Run the full batch simulation over n synthetic failed transactions.
@@ -145,7 +146,8 @@ def run_batch(
     # Initialise components
     model = RecoveryModel()
     engine = PolicyEngine()
-    explainer = LLMExplainer()
+    if explainer is None:
+        explainer = LLMExplainer()
     executor = SimulatedExecutor()
     audit_log = AuditLogger(db_path)
 
@@ -259,7 +261,7 @@ def _print_metrics_table(
 
     v_table.add_row("hard_stop_retry", f"{unconstrained_violations['hard_stop_retry']:,}", "HARD_STOP_001 / HARD_STOP_002 (RBI fraud/KYC & invalid card rules)")
     v_table.add_row("contact_cap_exceeded", f"{unconstrained_violations['contact_cap_exceeded']:,}", "RATE_LIMIT_001 (Max 3 retries lifetime cap)")
-    v_table.add_row("dnd_window_violation", f"{unconstrained_violations['dnd_window_violation']:,}", "WINDOW_001 (TRAI DND 08:00-21:00 window)")
+    v_table.add_row("dnd_window_violation", f"{unconstrained_violations['dnd_window_violation']:,}", "WINDOW_001 (TRAI DND 09:00-21:00 IST window)")
     v_table.add_row("cooldown_violation", f"{unconstrained_violations['cooldown_violation']:,}", "COOLDOWN_001 (30-minute rate limit cooldown)")
     v_table.add_row("TOTAL VIOLATIONS", f"{sum(unconstrained_violations.values()):,}", "Total unconstrained baseline infractions")
 
@@ -269,10 +271,18 @@ def _print_metrics_table(
 
 
 if __name__ == "__main__":
+    import os
     import sys
     logging.basicConfig(level=logging.WARNING)
 
-    n_arg = int(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_BATCH_SIZE
-    seed_arg = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_SEED
+    flags = [a for a in sys.argv[1:] if a.startswith("--")]
+    pos_args = [a for a in sys.argv[1:] if not a.startswith("--")]
 
-    run_batch(n=n_arg, seed=seed_arg)
+    n_arg = int(pos_args[0]) if len(pos_args) > 0 else DEFAULT_BATCH_SIZE
+    seed_arg = int(pos_args[1]) if len(pos_args) > 1 else DEFAULT_SEED
+
+    expl = None
+    if "--no-llm" in flags or "--offline" in flags or os.environ.get("MERIDIAN_OFFLINE") == "1":
+        expl = LLMExplainer(api_key="")
+
+    run_batch(n=n_arg, seed=seed_arg, explainer=expl)

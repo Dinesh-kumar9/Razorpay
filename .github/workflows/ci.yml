@@ -61,7 +61,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run simulation (run 1)
-        run: python -m simulation.runner 500 42 2>/dev/null
+        run: python -m simulation.runner 5000 42 2>/dev/null
         env:
           GEMINI_API_KEY: ""
           GOOGLE_GENAI_USE_VERTEXAI: "false"
@@ -75,7 +75,7 @@ jobs:
           from ingestion.generator import generate_transactions
           import json, random
 
-          txns = generate_transactions(500, 42)
+          txns = generate_transactions(5000, 42)
           blind = run_blind_retry_baseline(txns, random.Random(1042))
           multi = run_naive_multi_retry_baseline(txns, random.Random(1542))
 
@@ -89,7 +89,7 @@ jobs:
         run: rm -f audit.db
 
       - name: Run simulation (run 2)
-        run: python -m simulation.runner 500 42 2>/dev/null
+        run: python -m simulation.runner 5000 42 2>/dev/null
         env:
           GEMINI_API_KEY: ""
           GOOGLE_GENAI_USE_VERTEXAI: "false"
@@ -103,7 +103,7 @@ jobs:
           from ingestion.generator import generate_transactions
           import json, random
 
-          txns = generate_transactions(500, 42)
+          txns = generate_transactions(5000, 42)
           blind = run_blind_retry_baseline(txns, random.Random(1042))
           multi = run_naive_multi_retry_baseline(txns, random.Random(1542))
 

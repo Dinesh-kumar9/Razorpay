@@ -48,20 +48,13 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(
         default="",
         description=(
-            "Google Gemini API key. If empty, Gemini provider is skipped and "
-            "the pipeline falls through to Groq or template fallback."
+            "Google Gemini API key. If empty, all LLM calls silently fall back "
+            "to the deterministic template explanation. The pipeline never blocks."
         ),
     )
     google_genai_use_vertexai: bool = Field(
         default=False,
         description="Force Vertex AI mode (False = Developer API / API-key mode).",
-    )
-    groq_api_key: str = Field(
-        default="",
-        description=(
-            "Groq API key (console.groq.com). Secondary LLM provider — "
-            "6,000 req/day free tier. Used when Gemini is unavailable or quota-exhausted."
-        ),
     )
 
     # ── API server ─────────────────────────────────────────────────────────────

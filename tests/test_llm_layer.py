@@ -95,7 +95,7 @@ class TestLLMExplainer:
     """LLMExplainer.explain() never raises; falls back on any failure."""
 
     def test_no_api_key_returns_template(self) -> None:
-        """When both GEMINI_API_KEY and GROQ_API_KEY are empty, template fallback is used."""
+        """When GEMINI_API_KEY is empty, template fallback is used immediately."""
         explainer = LLMExplainer(api_key="", groq_api_key="")
         pd = make_policy_decision()
         result = explainer.explain(pd, make_shap_features(), "bank error", Decimal("1000"), "insufficient_funds")
@@ -103,7 +103,7 @@ class TestLLMExplainer:
         assert result.source == "template"
 
     def test_api_exception_returns_template(self) -> None:
-        """Gemini raising any exception + Groq disabled -> template fallback, no raise."""
+        """Gemini raising any exception -> template fallback, no raise."""
         explainer = LLMExplainer(api_key="mock_key", groq_api_key="")
         mock_client = MagicMock()
         mock_client.models.generate_content.side_effect = RuntimeError("API down")
@@ -115,7 +115,7 @@ class TestLLMExplainer:
         assert result.source == "template"
 
     def test_malformed_json_returns_template(self) -> None:
-        """Gemini returning non-JSON + Groq disabled -> template fallback."""
+        """Gemini returning non-JSON -> template fallback."""
         explainer = LLMExplainer(api_key="mock_key", groq_api_key="")
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -129,7 +129,7 @@ class TestLLMExplainer:
         assert result.source == "template"
 
     def test_schema_validation_failure_returns_template(self) -> None:
-        """Gemini returning JSON with missing fields + Groq disabled -> Pydantic rejects -> template."""
+        """Gemini returning JSON with missing fields -> Pydantic rejects -> template fallback."""
         explainer = LLMExplainer(api_key="mock_key", groq_api_key="")
         mock_client = MagicMock()
         mock_response = MagicMock()

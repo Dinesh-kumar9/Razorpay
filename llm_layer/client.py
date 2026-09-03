@@ -1,20 +1,19 @@
-"""
-LLM explanation client Ã¢â‚¬â€ multi-provider cascade, advisory-only, never blocks the pipeline.
+﻿"""
+LLM explanation client -- single-provider, advisory-only, never blocks the pipeline.
 
 Attempt order:
-  1. Google Gemini (gemini-2.5-flash) via google-genai SDK
-  2. Groq (llama-3.3-70b-versatile) via OpenAI-compatible REST API
-  3. Deterministic template fallback (llm_layer/fallback.py)
+  1. Google Gemini (gemini-3.6-flash) via google-genai SDK
+  2. Deterministic template fallback (llm_layer/fallback.py)
 
 This client has one contract: given a policy decision and context, return a
 valid LLMExplanation. It NEVER raises an exception. On any failure (missing key,
 API error, quota exhausted, malformed response, schema validation failure) it
-falls through to the next provider and eventually the deterministic template.
+falls through to the deterministic template.
 
 Architecture decisions:
   - docs/adr/0001-llm-has-no-execution-authority.md
   - docs/adr/0004-no-agent-framework.md
-  - docs/adr/0005-llm-fallback-design.md
+  - docs/adr/0005-llm-fallback-design.md  (single-provider invariant)
 """
 
 from __future__ import annotations
@@ -24,7 +23,6 @@ import logging
 import os
 from decimal import Decimal
 
-import httpx
 from google import genai
 from google.genai import types
 from pydantic import ValidationError
@@ -37,25 +35,18 @@ from schemas.explanation import LLMExplanation
 
 logger = logging.getLogger(__name__)
 
-# Ã¢â€â‚¬Ã¢â€â‚¬ Provider constants Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-# Primary: gemini-2.5-flash Ã¢â‚¬â€ valid production model identifier (google-genai SDK)
-# If unavailable for this API key tier, cascade continues to Groq immediately.
-GEMINI_MODEL: str = "gemini-2.5-flash"
-
-# Secondary: llama-3.3-70b-versatile Ã¢â‚¬â€ standard Groq production model
-# Runtime fallback: openai/gpt-oss-120b (used when primary Groq model is unavailable)
-GROQ_MODEL: str = "llama-3.3-70b-versatile"
-GROQ_MODEL_FALLBACK: str = "openai/gpt-oss-120b"
-GROQ_API_URL: str = "https://api.groq.com/openai/v1/chat/completions"
+# -- Provider constants -------------------------------------------------------
+# gemini-3.6-flash: current model for new API keys.
+# API returns 404 for gemini-2.5-flash: "use models/gemini-3.6-flash for the latest feature"
+GEMINI_MODEL: str = "gemini-3.6-flash"
 
 MAX_TOKENS: int = 1000
-TIMEOUT_SECONDS: float = 5.0  # fail fast Ã¢â€ â€™ cascade reaches Groq quickly
+TIMEOUT_SECONDS: float = 5.0  # fail fast -> template reached quickly
 
 
 def _parse_and_validate(raw_text: str, source: str) -> LLMExplanation | None:
     """
     Parse JSON text into a validated LLMExplanation. Returns None on any error.
-    Shared by both Gemini and Groq response paths.
     """
     text = raw_text.strip()
 
@@ -95,22 +86,21 @@ def _parse_and_validate(raw_text: str, source: str) -> LLMExplanation | None:
 
 class LLMExplainer:
     """
-    Advisory-only explanation layer with multi-provider cascade.
+    Advisory-only explanation layer. Single-provider design per ADR 0005.
 
-    Provider order: Gemini 3.6 Flash Ã¢â€ â€™ Groq llama-3.3-70b Ã¢â€ â€™ template fallback
+    Provider order: Gemini 2.5 Flash -> deterministic template fallback
 
     The LLM has zero execution authority. It cannot change the final_action.
-    Call explain() Ã¢â‚¬â€ it always returns LLMExplanation, never raises.
+    Call explain() -- it always returns LLMExplanation, never raises.
     """
 
     def __init__(
         self,
         api_key: str | None = None,
-        groq_api_key: str | None = None,
+        groq_api_key: str | None = None,  # kept for backwards-compat; ignored
     ) -> None:
         settings = get_settings()
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Gemini setup Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         if api_key is None:
             api_key = settings.gemini_api_key.strip()
 
@@ -122,27 +112,16 @@ class LLMExplainer:
                 settings.google_genai_use_vertexai
             ).lower()
             self._gemini_client = genai.Client(api_key=self._gemini_key)
-            logger.info("Primary LLM: Gemini %s initialized.", GEMINI_MODEL)
+            logger.info("LLM provider: Gemini %s initialized.", GEMINI_MODEL)
         else:
-            logger.info("Gemini key not set Ã¢â‚¬â€ Gemini provider disabled.")
+            logger.info("Gemini key not set -- all explanations will use template fallback.")
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Groq setup Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-        if groq_api_key is None:
-            groq_api_key = settings.groq_api_key.strip()
-
-        self._groq_key = groq_api_key
-
-        if self._groq_key:
-            logger.info("Secondary LLM: Groq %s initialized.", GROQ_MODEL)
-        else:
-            logger.info("Groq key not set Ã¢â‚¬â€ Groq provider disabled.")
-
-        if not self._gemini_key and not self._groq_key:
-            logger.info(
-                "No LLM keys configured Ã¢â‚¬â€ all explanations will use template fallback."
+        if groq_api_key is not None:
+            logger.debug(
+                "groq_api_key argument supplied but ignored: single-provider design (ADR 0005)."
             )
 
-    # Ã¢â€â‚¬Ã¢â€â‚¬ Provider: Gemini Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+    # -- Provider: Gemini -----------------------------------------------------
 
     def _call_gemini(self, user_prompt: str) -> LLMExplanation | None:
         """Attempt Gemini call. Returns None on any failure."""
@@ -156,7 +135,7 @@ class LLMExplainer:
                 response_schema=LLMExplanation,
                 temperature=0.2,
                 max_output_tokens=MAX_TOKENS,
-                # NOTE: thinking_config omitted Ã¢â‚¬â€ conflicts with response_schema
+                # NOTE: thinking_config omitted -- conflicts with response_schema
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(
                     disable=True
                 ),
@@ -180,71 +159,7 @@ class LLMExplainer:
             logger.warning("Gemini API error [%s]: %s", type(exc).__name__, str(exc)[:200])
             return None
 
-    # Ã¢â€â‚¬Ã¢â€â‚¬ Provider: Groq Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
-    def _call_groq(self, user_prompt: str) -> LLMExplanation | None:
-        """Attempt Groq call via OpenAI-compatible REST API. Returns None on any failure.
-
-        Tries GROQ_MODEL (llama-3.3-70b-versatile) first; on 404 model-not-found
-        retries with GROQ_MODEL_FALLBACK (openai/gpt-oss-120b).
-        """
-        if not self._groq_key:
-            return None
-
-        for model_name in (GROQ_MODEL, GROQ_MODEL_FALLBACK):
-            payload: dict[str, object] = {
-                "model": model_name,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.2,
-                "max_tokens": MAX_TOKENS,
-                "response_format": {"type": "json_object"},
-            }
-
-            try:
-                response = httpx.post(
-                    GROQ_API_URL,
-                    headers={
-                        "Authorization": f"Bearer {self._groq_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                    timeout=TIMEOUT_SECONDS,
-                )
-                if response.status_code == 404:
-                    logger.warning(
-                        "Groq model %s not found (404), trying fallback model.", model_name
-                    )
-                    continue
-                if response.status_code != 200:
-                    logger.warning(
-                        "Groq API HTTP %s: %s", response.status_code, response.text[:200]
-                    )
-                    return None
-
-                data: dict[str, object] = response.json()
-                choices = data.get("choices", [])
-                if not choices or not isinstance(choices, list):
-                    logger.warning("Groq returned empty choices list.")
-                    return None
-                raw_text: str = str(choices[0]["message"]["content"])  # noqa: E501
-                result = _parse_and_validate(raw_text, "Groq")
-                if result:
-                    logger.info("LIVE_CALL provider=groq model=%s", model_name)
-                return result
-
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "Groq API error [%s]: %s", type(exc).__name__, str(exc)[:200]
-                )
-                return None
-
-        logger.warning("All Groq models exhausted.")
-        return None
-
-    # Ã¢â€â‚¬Ã¢â€â‚¬ Public API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+    # -- Public API -----------------------------------------------------------
 
     def explain(
         self,
@@ -257,10 +172,9 @@ class LLMExplainer:
         """
         Generate a natural-language explanation for the given policy decision.
 
-        Cascade:
-          1. Gemini 3.6 Flash  (if GEMINI_API_KEY set)
-          2. Groq llama-3.3-70b (if GROQ_API_KEY set)
-          3. Deterministic template fallback (always succeeds)
+        Cascade (per ADR 0005):
+          1. Gemini 2.5 Flash  (if GEMINI_API_KEY set)
+          2. Deterministic template fallback (always succeeds)
 
         Never raises. Never blocks the pipeline.
         """
@@ -272,16 +186,11 @@ class LLMExplainer:
             failure_code=failure_code,
         )
 
-        # Try Gemini first
+        # Try Gemini
         result = self._call_gemini(user_prompt)
         if result:
             return result
 
-        # Try Groq second
-        result = self._call_groq(user_prompt)
-        if result:
-            return result
-
-        # Always-succeeds template fallback
+        # Always-succeeds template fallback (ADR 0005)
         logger.info("FALLBACK provider=template")
         return get_fallback_explanation(policy_decision, shap_features, failure_code)
