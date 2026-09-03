@@ -102,19 +102,19 @@
 
   <nav class="preset-strip" aria-label="Guardrail Scenarios">
     <span class="preset-strip-label">Pre-configured Scenarios:</span>
-    <button type="button" id="btn-preset-hard_stop" class="preset-button" onclick="applyPreset('hard_stop')">🚨 Hard Stop (RBI)</button>
-    <button type="button" id="btn-preset-rate_limit" class="preset-button" onclick="applyPreset('rate_limit')">🔢 Rate Limit (DPDP)</button>
-    <button type="button" id="btn-preset-cooldown" class="preset-button" onclick="applyPreset('cooldown')">⏱ Cooldown (30m)</button>
-    <button type="button" id="btn-preset-dnd_window" class="preset-button" onclick="applyPreset('dnd_window')">🌙 DND Window (TRAI)</button>
-    <button type="button" id="btn-preset-clean" class="preset-button" onclick="applyPreset('clean')">✅ Clean Ingestion</button>
+    <button type="button" id="btn-preset-dnd_window" class="preset-button preset-button--active" onclick="applyPreset('dnd_window')">🌙 DND Window (Genuine Override)</button>
+    <button type="button" id="btn-preset-rate_limit" class="preset-button" onclick="applyPreset('rate_limit')">🔢 Rate Limit (Genuine Override)</button>
+    <button type="button" id="btn-preset-hard_stop" class="preset-button" onclick="applyPreset('hard_stop')">🚨 Hard Stop (Mandated Action)</button>
+    <button type="button" id="btn-preset-cooldown" class="preset-button" onclick="applyPreset('cooldown')">⏱ Cooldown (Rate Guard)</button>
+    <button type="button" id="btn-preset-clean" class="preset-button" onclick="applyPreset('clean')">✅ Clean Ingestion (Confirmed)</button>
   </nav>
 
   <div class="case-body">
     <p id="preset-hint" class="mono" style="font-size:0.8rem;color:var(--color-paper-muted);margin-bottom:1.25rem;">
-      Select a scenario or customize transaction parameters to witness real-time policy evaluation.
+      WINDOW_001 — Genuine Override: Model proposed NUDGE_ALT_METHOD, but 22:00 IST falls in TRAI DND quiet hours (21:00–09:00 IST), forcing RETRY_DELAYED.
     </p>
 
-    <form id="demo-form" class="demo-grid-form" onsubmit="return false;">
+    <form id="demo-form" class="demo-grid-form" onsubmit="return false;" data-contact-count="0">
       <div class="field-group">
         <label for="demo-amount">Transaction Amount (₹)</label>
         <input type="number" id="demo-amount" class="field-input" value="25000" min="100" max="1000000" step="100" />
@@ -122,14 +122,14 @@
       <div class="field-group">
         <label for="demo-failure">Gateway Failure Code</label>
         <select id="demo-failure" class="field-select">
-          <option value="card_expired" selected>card_expired (Card Invalid)</option>
-          <option value="insufficient_funds">insufficient_funds (Soft Decline)</option>
+          <option value="insufficient_funds" selected>insufficient_funds (Soft Decline)</option>
+          <option value="network_timeout">network_timeout (Transient Retry Candidate)</option>
+          <option value="card_expired">card_expired (Card Invalid)</option>
           <option value="do_not_honor">do_not_honor (Bank Block)</option>
           <option value="card_blocked">card_blocked (RBI Hard Stop ⛔)</option>
           <option value="fraud_flag">fraud_flag (RBI Hard Stop ⛔)</option>
           <option value="kyc_hold">kyc_hold (RBI Hard Stop ⛔)</option>
           <option value="stolen_card">stolen_card (RBI Hard Stop ⛔)</option>
-          <option value="network_timeout">network_timeout (Transient)</option>
           <option value="gateway_error">gateway_error (Rail Down)</option>
         </select>
       </div>
@@ -152,7 +152,7 @@
       </div>
       <div class="field-group">
         <label for="demo-hour">Transaction Hour (0–23 IST)</label>
-        <input type="number" id="demo-hour" class="field-input" value="" min="0" max="23" placeholder="Now" />
+        <input type="number" id="demo-hour" class="field-input" value="22" min="0" max="23" placeholder="Now" />
       </div>
     </form>
 
@@ -164,12 +164,12 @@
 
     <!-- 6-Stage Hairline Progress Strip -->
     <div class="pipeline-progress-bar" aria-label="Pipeline Stages">
-      <div id="pipe-step-1" class="progress-step">1 Ingest</div>
+      <div id="pipe-step-1" class="progress-step">1 Ingestion</div>
       <div id="pipe-step-2" class="progress-step">2 Risk Model</div>
-      <div id="pipe-step-3" class="progress-step">3 Policy</div>
-      <div id="pipe-step-4" class="progress-step">4 Guardrail</div>
+      <div id="pipe-step-3" class="progress-step">3 Policy Engine</div>
+      <div id="pipe-step-4" class="progress-step">4 Guardrail Veto</div>
       <div id="pipe-step-5" class="progress-step">5 Advisory</div>
-      <div id="pipe-step-6" class="progress-step">6 Settle</div>
+      <div id="pipe-step-6" class="progress-step">6 Audit Log</div>
     </div>
 
     <!-- Live Execution Container -->

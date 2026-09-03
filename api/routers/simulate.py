@@ -76,6 +76,7 @@ async def simulate_single(txn: FailedTransaction) -> AuditRecord:
         model_confidence=model_decision.confidence,
         final_action=policy_decision.final_action,
         was_overridden=policy_decision.was_overridden,
+        rule_mandated=policy_decision.rule_mandated,
         override_reason=policy_decision.override_reason,
         guardrail_rule_id=policy_decision.guardrail_rule_id,
         retry_delay_minutes=policy_decision.retry_delay_minutes,

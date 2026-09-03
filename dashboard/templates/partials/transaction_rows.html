@@ -35,7 +35,7 @@
           </span>
         </td>
         <td>
-          {% if row.was_overridden %}
+          {% if row.was_overridden and row.model_action != row.final_action %}
           <!-- State 2: OVERRIDDEN -->
           <div class="decision-block is-overridden"
                data-action="{{ row.final_action | upper }}"
@@ -44,6 +44,15 @@
             <del class="action-struck" data-action="{{ row.model_action | upper }}" data-source="model">{{ row.model_action | upper }}</del>
             <span class="action-enforced" data-action="{{ row.final_action | upper }}" data-source="policy">{{ row.final_action | upper }}</span>
             <span class="rule-pill mono" data-rule-id="{{ row.guardrail_rule_id }}">{{ row.guardrail_rule_id }}</span>
+          </div>
+          {% elif row.guardrail_rule_id %}
+          <!-- State: MANDATED (Matches Model) -->
+          <div class="decision-block is-mandated"
+               data-action="{{ row.final_action | upper }}"
+               data-rule-id="{{ row.guardrail_rule_id }}"
+               data-source="policy">
+            <span class="action-mandated-name" data-action="{{ row.final_action | upper }}" data-source="policy">{{ row.final_action | upper }}</span>
+            <span class="rule-pill-mandated mono" data-rule-id="{{ row.guardrail_rule_id }}">{{ row.guardrail_rule_id }}</span>
           </div>
           {% else %}
           <!-- State 3: CONFIRMED -->

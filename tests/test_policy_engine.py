@@ -85,10 +85,12 @@ class TestHardStop001:
         decision = eng.evaluate(
             txn, make_model_decision(txn, action=RecoveryAction.ESCALATE_TO_HUMAN)
         )
-        # Rule fires, override_action == model_action (both ESCALATE), so
-        # was_overridden should still be True (rule fired)
+        # Rule fires, override_action == model_action (both ESCALATE):
+        # was_overridden is False (action was NOT substituted), but rule_mandated is True
         assert decision.final_action == RecoveryAction.ESCALATE_TO_HUMAN
         assert decision.guardrail_rule_id == "HARD_STOP_001"
+        assert decision.was_overridden is False
+        assert decision.rule_mandated is True
 
     def test_non_hard_stop_code_not_affected(self) -> None:
         """Soft-decline codes are not affected by HARD_STOP_001."""

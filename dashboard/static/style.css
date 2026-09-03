@@ -440,6 +440,75 @@ pre,
   letter-spacing: 0.05em;
 }
 
+/* State: MANDATED (Guardrail rule fired, but matched model recommendation) */
+.decision-block.is-mandated,
+.decision-state--mandated,
+.badge-mandated {
+  border: 1px solid var(--color-advisory) !important;
+  background-color: var(--color-advisory-tint);
+  color: var(--color-paper) !important;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-mono);
+}
+
+.action-mandated-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-paper);
+}
+
+.mandated-tag {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-advisory);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rule-pill-mandated {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-advisory);
+  border: 1px solid var(--color-advisory);
+  padding: 0.18rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background-color: rgba(201, 162, 39, 0.12);
+  letter-spacing: 0.04em;
+}
+
+.mandated-alert-banner {
+  border: 1px solid var(--color-advisory);
+  background-color: var(--color-advisory-tint);
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  border-left: 4px solid var(--color-advisory);
+  border-radius: var(--radius-sm);
+}
+
+.mandated-alert-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.mandated-alert-title {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-advisory);
+}
+
 /* ── Guardrail Override Banner (Live ARIA region) ──────────────────────── */
 .override-alert-banner {
   border: 1px solid var(--color-overridden);

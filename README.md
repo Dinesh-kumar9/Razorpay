@@ -1,4 +1,4 @@
-﻿# Project Meridian â€” AI Revenue Recovery Agent
+# Project Meridian â€” AI Revenue Recovery Agent
 
 > **Razorpay AI Buildathon Â· Track 3 Â· Revenue Recovery**
 >
@@ -45,18 +45,20 @@ HTMX Dashboard (FastAPI + Jinja2)
 
 | Metric | Value | vs Baseline | Status |
 |---|---|---|---|
-| Total at-risk | â‚¹4,05,49,036 | â€” | â€” |
-| **Agent recovered** | **â‚¹98,27,827** | â€” | â€” |
-| Single-attempt baseline | â‚¹18,53,479 | **+430.2%** âœ… | â‰¥20% target |
-| Constrained multi-retry *(honest comparison)* | â‚¹49,48,845 | **+98.6%** âœ… | â‰¥20% target |
-| Unconstrained multi-retry *(illegal â€” 15,890 violations)* | â‚¹1,17,02,972 | âˆ’16.0% | âŒ disqualified |
-| Stopping-rule violations | **0** | â€” | âœ… |
-| Explanation coverage | **100%** | â€” | âœ… |
-| False-escalation count | 0 (0.0%) | â€” | âœ… |
+| Total at-risk | ₹4,05,49,036 | — | — |
+| **Agent recovered** | **₹97,08,443** | — | **23.94% recovery** |
+| Single-attempt baseline | ₹18,53,479 | **+423.8%** ✅ | ≥20% target |
+| Constrained multi-retry *(honest comparison)* | ₹50,04,245 | **+94.0%** ✅ | ≥20% target |
+| Unconstrained multi-retry *(illegal — 16,406 violations)* | ₹1,17,02,972 | −17.0% | ❌ disqualified |
+| Stopping-rule violations | **0** | — | ✅ PASS |
+| Explanation coverage | **100%** | — | ✅ PASS |
+| False-escalation count | 0 (0.0%) | — | ✅ PASS |
+| **Genuine Guardrail Overrides** (`model != final`) | **2,254 (45.1%)** | — | ✅ Audited |
+| **Statutory Rules Mandated** (`rule_mandated=True`) | **3,779 (75.6%)** | — | ✅ Enforced |
 
 > **Why the unconstrained baseline is disqualified:** Blind multi-retry recovers more revenue but
-> commits 15,890 policy violations â€” 6,438 retries on fraud/KYC-flagged cards (RBI), 6,144
-> contacts outside 09:00â€“21:00 IST (TRAI DND), 2,961 exceeding max-retry caps, and 347 cooldown
+> commits 16,406 policy violations — 6,438 retries on fraud/KYC-flagged cards (RBI), 6,660
+> contacts outside 09:00–21:00 IST (TRAI DND), 2,961 exceeding max-retry caps, and 347 cooldown
 > breaches. This is the entire point of the guardrail system.
 
 > **Reproducible.** Run `python -m simulation.runner` with seed=42 to get identical numbers.

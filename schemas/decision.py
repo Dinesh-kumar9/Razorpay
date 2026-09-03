@@ -98,7 +98,11 @@ class PolicyDecision(BaseModel):
     final_action: RecoveryAction
     model_action: RecoveryAction = Field(description="What the model originally recommended")
     was_overridden: bool = Field(
-        description="True if the policy engine substituted a different action than the model's recommendation"
+        description="True if the policy engine substituted a different action than the model's recommendation (final_action != model_action)"
+    )
+    rule_mandated: bool = Field(
+        default=False,
+        description="True if a statutory guardrail rule fired, regardless of whether it substituted a different action",
     )
     override_reason: str | None = Field(
         default=None,

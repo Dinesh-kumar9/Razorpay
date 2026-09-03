@@ -18,12 +18,20 @@
   </header>
 
   <div class="case-body">
-    <!-- Optional Guardrail Override Alert Banner -->
-    {% if record.was_overridden %}
+    <!-- Optional Guardrail Override or Mandate Alert Banner -->
+    {% if record.was_overridden and record.model_action != record.final_action %}
     <div class="override-alert-banner" role="alert" aria-live="polite">
       <div class="override-alert-header">
         <span class="rule-pill mono" data-rule-id="{{ record.guardrail_rule_id }}">{{ record.guardrail_rule_id }}</span>
-        <span class="override-alert-title">Statutory Policy Engine Veto Fired</span>
+        <span class="override-alert-title">Statutory Policy Engine Veto Fired (Action Changed)</span>
+      </div>
+      <div class="override-alert-reason">{{ record.override_reason }}</div>
+    </div>
+    {% elif record.guardrail_rule_id %}
+    <div class="mandated-alert-banner" role="alert" aria-live="polite">
+      <div class="mandated-alert-header">
+        <span class="rule-pill-mandated mono" data-rule-id="{{ record.guardrail_rule_id }}">{{ record.guardrail_rule_id }}</span>
+        <span class="mandated-alert-title">Statutory Rule Mandated (Model Independently Agreed)</span>
       </div>
       <div class="override-alert-reason">{{ record.override_reason }}</div>
     </div>
@@ -102,15 +110,28 @@
         {% endif %}
       </section>
 
-      <!-- Stage 3 & 4: Policy Engine & Guardrail Veto Evaluation -->
+      <!-- Stage 3: Policy Engine (Candidate Action) -->
       <section class="pipeline-stage">
         <div class="stage-meta">
-          <span class="stage-number">3·4</span>
-          <h3 class="stage-title">Policy Engine &amp; Statutory Guardrail Veto</h3>
+          <span class="stage-number">3</span>
+          <h3 class="stage-title">Policy Engine (Candidate Action)</h3>
+          <span class="stage-role-tag role--ml">Pre-Guardrail Check</span>
+        </div>
+        <div class="decision-block decision-state--proposed" data-action="{{ record.model_action | upper }}" data-source="policy">
+          <span class="decision-state-tag">Candidate Submitted to Guardrails:</span>
+          <strong class="mono">{{ record.model_action | upper }}</strong>
+        </div>
+      </section>
+
+      <!-- Stage 4: Guardrail Veto (Final Decision) -->
+      <section class="pipeline-stage">
+        <div class="stage-meta">
+          <span class="stage-number">4</span>
+          <h3 class="stage-title">Guardrail Veto (Final Decision)</h3>
           <span class="stage-role-tag role--veto">Veto Authority</span>
         </div>
 
-        {% if record.was_overridden %}
+        {% if record.was_overridden and record.model_action != record.final_action %}
         <!-- State 2: OVERRIDDEN -->
         <div class="decision-block is-overridden"
              data-action="{{ record.final_action | upper }}"
@@ -123,6 +144,19 @@
         </div>
         <p style="margin-top:0.75rem;font-size:0.88rem;color:var(--color-paper-muted);">
           Triggered by rule <strong class="mono" style="color:var(--color-overridden)">{{ record.guardrail_rule_id }}</strong>: {{ record.override_reason }}
+        </p>
+        {% elif record.guardrail_rule_id %}
+        <!-- State: MANDATED (Matches Model) -->
+        <div class="decision-block is-mandated"
+             data-action="{{ record.final_action | upper }}"
+             data-rule-id="{{ record.guardrail_rule_id }}"
+             data-source="policy">
+          <span class="mandated-tag">Mandated (Concurs with Model):</span>
+          <span class="action-mandated-name" data-action="{{ record.final_action | upper }}" data-source="policy">{{ record.final_action | upper }}</span>
+          <span class="rule-pill-mandated mono" data-rule-id="{{ record.guardrail_rule_id }}">{{ record.guardrail_rule_id }}</span>
+        </div>
+        <p style="margin-top:0.75rem;font-size:0.88rem;color:var(--color-paper-muted);">
+          Statutory rule <strong class="mono" style="color:var(--color-advisory)">{{ record.guardrail_rule_id }}</strong> mandated this action. The risk model independently reached the same conclusion; policy engine enforces this as binding statutory compliance.
         </p>
         {% else %}
         <!-- State 3: CONFIRMED -->

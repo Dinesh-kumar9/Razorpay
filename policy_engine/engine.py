@@ -73,12 +73,14 @@ class PolicyEngine:
         for rule_fn in RULE_PRIORITY:
             result = rule_fn(txn, proposed)
             if result is not None:
-                # Rule fired — override the model's recommendation.
+                # Rule fired — check if it actually changed the action
+                actually_overridden = result.override_action != proposed
                 return PolicyDecision(
                     txn_id=txn.txn_id,
                     final_action=result.override_action,
                     model_action=proposed,
-                    was_overridden=True,
+                    was_overridden=actually_overridden,
+                    rule_mandated=True,
                     override_reason=result.reason,
                     guardrail_rule_id=result.rule_id,
                     retry_delay_minutes=result.retry_delay_minutes,
@@ -90,6 +92,7 @@ class PolicyEngine:
             final_action=proposed,
             model_action=proposed,
             was_overridden=False,
+            rule_mandated=False,
             override_reason=None,
             guardrail_rule_id=None,
             retry_delay_minutes=model_decision.retry_delay_minutes,

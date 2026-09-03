@@ -74,6 +74,7 @@ class AuditRecord(BaseModel):
     model_confidence: float
     final_action: RecoveryAction
     was_overridden: bool
+    rule_mandated: bool = False
     override_reason: str | None = None
     guardrail_rule_id: str | None = None
     retry_delay_minutes: int | None = None
@@ -101,6 +102,7 @@ class AuditRecord(BaseModel):
             "model_action": self.model_action.value,
             "final_action": self.final_action.value,
             "was_overridden": self.was_overridden,
+            "rule_mandated": self.rule_mandated,
             "guardrail_rule_id": self.guardrail_rule_id,
             "recovered": self.simulated_outcome.recovered,
             "amount_recovered_inr": float(self.amount_recovered_inr),
@@ -163,9 +165,17 @@ class BatchMetrics(BaseModel):
 
     # Guardrail transparency
     override_count: int = Field(
-        description="Number of times the policy engine overrode the model's recommendation"
+        description="Number of times the policy engine substituted a different action than the model's recommendation"
     )
     override_rate_pct: float
+    rule_mandated_count: int = Field(
+        default=0,
+        description="Number of times a statutory guardrail rule fired (whether overriding or concurring with model)",
+    )
+    rule_mandated_rate_pct: float = Field(
+        default=0.0,
+        description="% of transactions where a statutory guardrail rule fired",
+    )
 
     # LLM health
     llm_fallback_to_template_count: int = Field(

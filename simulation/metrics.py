@@ -83,9 +83,13 @@ def compute_metrics(
     )
     false_escalation_rate = float(false_escalations / n * 100)
 
-    # Override tracking
+    # Override tracking (genuine overrides: model_action != final_action)
     overrides = sum(bool(r.was_overridden) for r in records)
     override_rate = float(overrides / n * 100)
+
+    # Statutory rule mandated tracking (all guardrail rule activations)
+    mandated = sum(bool(getattr(r, "rule_mandated", False) or r.guardrail_rule_id) for r in records)
+    mandated_rate = float(mandated / n * 100)
 
     # LLM fallback tracking
     template_count = sum(
@@ -110,6 +114,8 @@ def compute_metrics(
         false_escalation_rate_pct=round(false_escalation_rate, 2),
         override_count=overrides,
         override_rate_pct=round(override_rate, 2),
+        rule_mandated_count=mandated,
+        rule_mandated_rate_pct=round(mandated_rate, 2),
         llm_fallback_to_template_count=template_count,
         llm_fallback_rate_pct=round(fallback_rate, 2),
     )

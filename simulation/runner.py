@@ -109,6 +109,7 @@ def run_single(
         model_confidence=model_decision.confidence,
         final_action=policy_decision.final_action,
         was_overridden=policy_decision.was_overridden,
+        rule_mandated=policy_decision.rule_mandated,
         override_reason=policy_decision.override_reason,
         guardrail_rule_id=policy_decision.guardrail_rule_id,
         retry_delay_minutes=policy_decision.retry_delay_minutes,
@@ -266,7 +267,8 @@ def _print_metrics_table(
     v_table.add_row("TOTAL VIOLATIONS", f"{sum(unconstrained_violations.values()):,}", "Total unconstrained baseline infractions")
 
     console.print(v_table)
-    console.print(f"\n  [dim]Random seed: {m.random_seed} | Total transactions: {m.total_transactions:,} | Total at-risk: Rs.{m.total_at_risk_inr:,.0f}[/dim]\n")
+    console.print(f"\n  [dim]Random seed: {m.random_seed} | Total transactions: {m.total_transactions:,} | Total at-risk: Rs.{m.total_at_risk_inr:,.0f}[/dim]")
+    console.print(f"  [dim]True overrides (action substituted): {m.override_count:,} ({m.override_rate_pct:.2f}%) | Rule mandated: {m.rule_mandated_count:,} ({m.rule_mandated_rate_pct:.2f}%)[/dim]\n")
 
 
 

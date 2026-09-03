@@ -1,10 +1,20 @@
 /**
  * Project Meridian — Case-File Ledger Dashboard Client
- * Renders decisions in 3 strict states: PROPOSED, OVERRIDDEN, CONFIRMED.
+ * Renders decisions in strict states: PROPOSED, OVERRIDDEN, MANDATED, CONFIRMED.
  * Every decision element carries data-action, data-rule-id, and data-source attributes.
  */
 
 var PRESETS = {
+  cooldown: {
+    failure: "network_timeout",
+    amount: 5000,
+    method: "upi",
+    retryCount: 1,
+    lastContact: 15,
+    hour: 16,
+    contactCount: 0,
+    desc: "COOLDOWN_001 — Genuine Override: Model proposed RETRY_NOW, but contact 15m ago forces RETRY_DELAYED",
+  },
   hard_stop: {
     failure: "fraud_flag",
     amount: 50000,
@@ -13,7 +23,7 @@ var PRESETS = {
     lastContact: "",
     hour: 14,
     contactCount: 0,
-    desc: "HARD_STOP_001 — RBI fraud flag unconditionally forces human escalation",
+    desc: "HARD_STOP_001 — RBI fraud flag: Mandates ESCALATE_TO_HUMAN (concurs with model's safety prediction)",
   },
   rate_limit: {
     failure: "insufficient_funds",
@@ -23,17 +33,7 @@ var PRESETS = {
     lastContact: 120,
     hour: 15,
     contactCount: 1,
-    desc: "RATE_LIMIT_002 / RATE_LIMIT_001 — Contact cap prevents customer harassment",
-  },
-  cooldown: {
-    failure: "network_timeout",
-    amount: 5000,
-    method: "upi",
-    retryCount: 1,
-    lastContact: 15,
-    hour: 16,
-    contactCount: 0,
-    desc: "COOLDOWN_001 — Contacted 15 min ago, immediate retry blocked for 30m",
+    desc: "RATE_LIMIT_001 — Genuine Override: Model proposed RETRY_DELAYED, but retry_count >= 3 forces STOP",
   },
   dnd_window: {
     failure: "insufficient_funds",
@@ -43,7 +43,7 @@ var PRESETS = {
     lastContact: "",
     hour: 22,
     contactCount: 0,
-    desc: "WINDOW_001 — 22:00 IST falls in TRAI DND quiet hours (21:00–09:00 IST)",
+    desc: "WINDOW_001 — Genuine Override: Model proposed immediate contact, 22:00 IST quiet hours force RETRY_DELAYED",
   },
   clean: {
     failure: "card_expired",
@@ -104,21 +104,34 @@ async function runDemo() {
   var lastContactMin = document.getElementById("demo-contact-min").value;
   var hourVal = document.getElementById("demo-hour").value;
 
+  var pad = function (n) { return (n < 10 ? "0" : "") + n; };
   var now = new Date();
   var txnHour = hourVal !== "" ? parseInt(hourVal, 10) : now.getHours();
-  var timeOfFailure = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    txnHour,
-    0,
-    0
-  ).toISOString();
+  var timeOfFailure =
+    now.getFullYear() +
+    "-" +
+    pad(now.getMonth() + 1) +
+    "-" +
+    pad(now.getDate()) +
+    "T" +
+    pad(txnHour) +
+    ":00:00Z";
 
   var lastContact = null;
   if (lastContactMin !== "") {
     var min = parseInt(lastContactMin, 10);
-    lastContact = new Date(Date.now() - min * 60 * 1000).toISOString();
+    var contactDate = new Date(Date.now() - min * 60 * 1000);
+    lastContact =
+      contactDate.getFullYear() +
+      "-" +
+      pad(contactDate.getMonth() + 1) +
+      "-" +
+      pad(contactDate.getDate()) +
+      "T" +
+      pad(contactDate.getHours()) +
+      ":" +
+      pad(contactDate.getMinutes()) +
+      ":00Z";
   }
 
   var txnId = "TXN-DEMO-" + Math.floor(Math.random() * 90000 + 10000);
@@ -195,23 +208,27 @@ async function runDemo() {
 }
 
 /**
- * Render the decision strictly into one of three states:
+ * Render the decision strictly into one of four states:
  * 1. PROPOSED: model candidate (grey dashed border)
- * 2. OVERRIDDEN: struck out proposal + solid red final + rule ID (solid red border)
- * 3. CONFIRMED: solid slate-green border
+ * 2. OVERRIDDEN: model != final (struck out proposal + solid red final + rule ID)
+ * 3. MANDATED: model == final and rule fired (amber/gold border + rule pill)
+ * 4. CONFIRMED: no rule fired (solid slate-green border)
  */
 function renderResult(container, rec) {
-  var wasOverridden = !!rec.was_overridden;
   var modelAction = (rec.model_action || "UNKNOWN").toUpperCase();
   var finalAction = (rec.final_action || "UNKNOWN").toUpperCase();
   var ruleId = rec.guardrail_rule_id || "";
   var reason = rec.override_reason || "";
+  var wasOverridden = !!rec.was_overridden && (modelAction !== finalAction);
+  var isMandated = !!ruleId && (modelAction === finalAction);
   var recovered = rec.simulated_outcome && rec.simulated_outcome.recovered;
   var recoveredAmt = parseFloat(
     (rec.simulated_outcome && rec.simulated_outcome.amount_recovered_inr) || 0
   );
 
   var decisionMarkup = "";
+  var alertBanner = "";
+
   if (wasOverridden) {
     decisionMarkup =
       '<div class="decision-block is-overridden" ' +
@@ -229,6 +246,38 @@ function renderResult(container, rec) {
       escapeHtml(ruleId) +
       '</span>' +
       '</div>';
+
+    alertBanner =
+      '<div class="override-alert-banner" role="alert" aria-live="polite">' +
+      '<div class="override-alert-header">' +
+      '<span class="rule-pill mono" data-rule-id="' + escapeHtml(ruleId) + '">' + escapeHtml(ruleId) + '</span>' +
+      '<span class="override-alert-title">Statutory Policy Engine Veto Applied (Action Changed)</span>' +
+      '</div>' +
+      '<div class="override-alert-reason">' + escapeHtml(reason) + '</div>' +
+      '</div>';
+  } else if (isMandated) {
+    decisionMarkup =
+      '<div class="decision-block is-mandated" ' +
+      'data-action="' + escapeHtml(finalAction) + '" ' +
+      'data-rule-id="' + escapeHtml(ruleId) + '" ' +
+      'data-source="policy">' +
+      '<span class="mandated-tag">Mandated (Concurs with Model):</span> ' +
+      '<span class="action-mandated-name" data-action="' + escapeHtml(finalAction) + '" data-source="policy">' +
+      escapeHtml(finalAction) +
+      '</span> ' +
+      '<span class="rule-pill-mandated mono" data-rule-id="' + escapeHtml(ruleId) + '">' +
+      escapeHtml(ruleId) +
+      '</span>' +
+      '</div>';
+
+    alertBanner =
+      '<div class="mandated-alert-banner" role="alert" aria-live="polite">' +
+      '<div class="mandated-alert-header">' +
+      '<span class="rule-pill-mandated mono" data-rule-id="' + escapeHtml(ruleId) + '">' + escapeHtml(ruleId) + '</span>' +
+      '<span class="mandated-alert-title">Statutory Rule Mandated (Model Independently Agreed)</span>' +
+      '</div>' +
+      '<div class="override-alert-reason">' + escapeHtml(reason) + '</div>' +
+      '</div>';
   } else {
     decisionMarkup =
       '<div class="decision-block is-confirmed" ' +
@@ -238,18 +287,6 @@ function renderResult(container, rec) {
       '<span class="action-confirmed-name" data-action="' + escapeHtml(finalAction) + '" data-source="policy">' +
       escapeHtml(finalAction) +
       '</span>' +
-      '</div>';
-  }
-
-  var overrideBanner = "";
-  if (wasOverridden) {
-    overrideBanner =
-      '<div class="override-alert-banner" role="alert" aria-live="polite">' +
-      '<div class="override-alert-header">' +
-      '<span class="rule-pill mono" data-rule-id="' + escapeHtml(ruleId) + '">' + escapeHtml(ruleId) + '</span>' +
-      '<span class="override-alert-title">Statutory Policy Engine Veto Applied</span>' +
-      '</div>' +
-      '<div class="override-alert-reason">' + escapeHtml(reason) + '</div>' +
       '</div>';
   }
 
@@ -270,7 +307,7 @@ function renderResult(container, rec) {
     '<span class="data-value text-muted timestamp">' + new Date().toISOString() + '</span>' +
     '</header>' +
     '<div class="case-body">' +
-    overrideBanner +
+    alertBanner +
     '<div class="pipeline-sequence">' +
 
     // Stage 1
@@ -294,13 +331,22 @@ function renderResult(container, rec) {
     '</div>' +
     '</section>' +
 
-    // Stage 3 & 4
+    // Stage 3: Policy Engine Candidate Action
     '<section class="pipeline-stage">' +
-    '<div class="stage-meta"><span class="stage-number">3·4</span><h4 class="stage-title">Policy Engine &amp; Guardrails</h4><span class="stage-role-tag role--veto">Veto Authority</span></div>' +
+    '<div class="stage-meta"><span class="stage-number">3</span><h4 class="stage-title">Policy Engine (Candidate Action)</h4><span class="stage-role-tag role--ml">Pre-Guardrail Check</span></div>' +
+    '<div class="decision-block decision-state--proposed" data-action="' + escapeHtml(modelAction) + '" data-source="policy">' +
+    '<span class="decision-state-tag">Candidate Submitted to Guardrail:</span> ' +
+    '<strong class="mono">' + escapeHtml(modelAction) + '</strong>' +
+    '</div>' +
+    '</section>' +
+
+    // Stage 4: Guardrail Veto (Final Decision)
+    '<section class="pipeline-stage">' +
+    '<div class="stage-meta"><span class="stage-number">4</span><h4 class="stage-title">Guardrail Veto (Final Decision)</h4><span class="stage-role-tag role--veto">Veto Authority</span></div>' +
     decisionMarkup +
     '</section>' +
 
-    // Stage 5
+    // Stage 5: Explanation Layer
     '<section class="pipeline-stage">' +
     '<div class="stage-meta"><span class="stage-number">5</span><h4 class="stage-title">Explanation Layer</h4><span class="stage-role-tag role--advisory">Advisory Only</span></div>' +
     '<article class="advisory-block" data-source="llm">' +
@@ -314,7 +360,7 @@ function renderResult(container, rec) {
     '</article>' +
     '</section>' +
 
-    // Stage 6
+    // Stage 6: Settlement & Audit Trail
     '<section class="pipeline-stage">' +
     '<div class="stage-meta"><span class="stage-number">6</span><h4 class="stage-title">Settlement &amp; Audit Trail</h4></div>' +
     '<dl class="dossier-grid">' +
