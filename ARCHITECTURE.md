@@ -26,7 +26,7 @@ flowchart TD
     B --> C["policy_engine\n(Deterministic guardrails)"]
     C -->|"Guardrail fires: overrides"| D["policy_decision\n(was_overridden=True)"]
     C -->|"No rule fires: passes through"| D
-    D --> E["llm_layer\n(Google Gemini 3.6 Flash - Advisory)"]
+    D --> E["llm_layer\n(Google Gemini 2.5 Flash - Advisory)"]
     E -.->|"LLMExplanation (read-only)"| H["audit\n(Append-only SQLite)"]
     D --> F["execution\n(Simulated Razorpay API executor)"]
     F --> G["simulation / metrics\n(Outcome sampling & evaluation)"]
@@ -52,7 +52,7 @@ Evaluates mandatory regulatory and operational rules in strict priority order (h
 
 ### 4. `llm_layer/` â€” Schema-Constrained Advisory Explanations
 **Files:** [`llm_layer/client.py`](llm_layer/client.py), [`llm_layer/fallback.py`](llm_layer/fallback.py), [`llm_layer/prompts.py`](llm_layer/prompts.py)  
-Calls Google Gemini 3.6 Flash via the `google-genai` SDK using native JSON schema enforcement (`response_schema=LLMExplanation`), `thinking_budget=0`, and disabled automatic function calling (AFC) for low-latency (~2.6s) advisory explanations. If the API is unreachable, times out, or fails schema validation, the system falls back instantly to deterministic templates (`fallback.py`). The pipeline never blocks on the LLM.
+Calls Google Gemini 2.5 Flash via the `google-genai` SDK using native JSON schema enforcement (`response_schema=LLMExplanation`), `thinking_budget=0`, and disabled automatic function calling (AFC) for low-latency (~2.6s) advisory explanations. If the API is unreachable, times out, or fails schema validation, the system falls back instantly to deterministic templates (`fallback.py`). The pipeline never blocks on the LLM.
 
 ### 5. `execution/` â€” Simulated Gateway Executor
 **File:** [`execution/executor.py`](execution/executor.py)  
@@ -99,7 +99,7 @@ simulation/runner.py:run_single()
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| **LLM Explainer** | Google Gemini 3.6 Flash (`google-genai`) | Native schema constraints (`response_schema`), sub-3s latency, single-provider architecture |
+| **LLM Explainer** | Google Gemini 2.5 Flash (`google-genai`) | Native schema constraints (`response_schema`), sub-3s latency, single-provider architecture |
 | **Risk / Uplift Model** | XGBoost + SHAP | High interpretability, non-linear feature interactions, fast CPU inference |
 | **Policy Engine** | Pure Python Rules | Deterministic regulatory compliance (RBI FRM, DPDP, TRAI DND), zero framework risk |
 | **Audit Storage** | SQLite (Append-only) | Immutable structured audit log with parameterized queries |

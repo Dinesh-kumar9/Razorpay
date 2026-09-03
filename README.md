@@ -27,7 +27,7 @@ XGBoost Uplift Model â”€â”€â”€â”€â”€â”€â”€â�
 Policy Engine (FINAL AUTHORITY) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ 6 guardrail rules, priority-ordered
      â”‚  policy.final_action
      â–¼
-LLM Explanation Layer (advisory only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Google Gemini 3.6 Flash â†’ Pydantic validate â†’ template fallback
+LLM Explanation Layer (advisory only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Google Gemini 2.5 Flash â†’ Pydantic validate â†’ template fallback
      â”‚  explanation.rationale
      â–¼
 Simulated Execution + Outcome Model
@@ -66,7 +66,7 @@ HTMX Dashboard (FastAPI + Jinja2)
 > In the 5,000-transaction batch simulation and CI, all explanations are generated via the deterministic template fallback (llm_fallback_rate_pct: 100.0%). This is by design:
 > 1. **Rate limits:** Google Gemini free tier enforces a strict 15 Requests Per Minute (RPM) cap; firing 5,000 live API calls sequentially would take >5.5 hours and trigger upstream 429 RESOURCE_EXHAUSTED.
 > 2. **Financial determinism:** The LLM is strictly advisory and never touches money or state. Every recovery decision, revenue outcome, and compliance check is identical whether using live Gemini or template fallback.
-> 3. **Live calls:** Live Gemini 3.6 Flash generation is used for interactive single-transaction evaluations via the web dashboard (/api/simulate/single).
+> 3. **Live calls:** Live Gemini 2.5 Flash generation is used for interactive single-transaction evaluations via the web dashboard (/api/simulate/single).
 
 ---
 
@@ -111,7 +111,7 @@ uvicorn api.main:app --reload --port 8000
 | [0002](docs/adr/0002-policy-engine-overrides-model.md) | Policy engine overrides model |
 | [0003](docs/adr/0003-synthetic-data-provenance.md) | Fully synthetic, cited dataset |
 | [0004](docs/adr/0004-uplift-model-design.md) | Single XGBoost with action as feature |
-| [0005](docs/adr/0005-llm-fallback-design.md) | Schema-validate-or-template fallback (Gemini 3.6 Flash) |
+| [0005](docs/adr/0005-llm-fallback-design.md) | Schema-validate-or-template fallback (Gemini 2.5 Flash) |
 | [0006](docs/adr/0006-htmx-dashboard.md) | HTMX server-rendered dashboard |
 | [0007](docs/adr/0007-no-agent-framework.md) | No agent framework |
 
@@ -138,7 +138,7 @@ project-meridian/
 â”œâ”€â”€ ingestion/       Synthetic transaction generator
 â”œâ”€â”€ risk_model/      XGBoost uplift model + SHAP explainer
 â”œâ”€â”€ policy_engine/   Guardrail rules (the load-bearing component)
-â”œâ”€â”€ llm_layer/       Google Gemini 3.6 Flash + deterministic template fallback
+â”œâ”€â”€ llm_layer/       Google Gemini 2.5 Flash + deterministic template fallback
 â”œâ”€â”€ execution/       Simulated Razorpay API executor
 â”œâ”€â”€ audit/           Append-only SQLite audit log
 â”œâ”€â”€ simulation/      Batch runner + baselines + metrics
@@ -154,7 +154,7 @@ project-meridian/
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `GEMINI_API_KEY` | No | (empty) | Google Gemini 3.6 Flash key. If unset, template fallback is used. |
+| `GEMINI_API_KEY` | No | (empty) | Google Gemini 2.5 Flash key. If unset, template fallback is used. |
 | `GOOGLE_GENAI_USE_VERTEXAI` | No | `false` | Force Gemini Developer API (API key mode) |
 | `API_HOST` | No | `0.0.0.0` | API bind host |
 | `API_PORT` | No | `8000` | API bind port |
@@ -201,7 +201,7 @@ Razorpay explicitly asks: *"Document a real failure you hit and how you diagnose
 
 ### 3. Gemini Returned Markdown-Fenced JSON, Breaking Pydantic Validation
 
-**Problem:** When calling Gemini 3.6 Flash with `response_mime_type="application/json"`, the API occasionally returned the JSON body wrapped in triple-backtick markdown fences (` ```json\n{...}\n``` `). Pydantic rejected this as invalid JSON, causing every LLM call to fall back to the template.
+**Problem:** When calling Gemini 2.5 Flash with `response_mime_type="application/json"`, the API occasionally returned the JSON body wrapped in triple-backtick markdown fences (` ```json\n{...}\n``` `). Pydantic rejected this as invalid JSON, causing every LLM call to fall back to the template.
 
 **Diagnosis:** Logged the raw LLM response string in `llm_layer/client.py` and observed the fenced format in the exception output.
 
