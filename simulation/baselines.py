@@ -86,7 +86,7 @@ def run_naive_multi_retry_with_violations(
     for every action it takes against the policy engine's guardrail rules:
       - hard_stop_retry: retrying hard-stop / invalid card failure codes
       - contact_cap_exceeded: retries exceeding maximum retry limit (MAX_RETRIES_PER_TXN)
-      - dnd_window_violation: attempts occurring outside the 08:00–21:00 window
+      - dnd_window_violation: attempts occurring outside the 09:00-21:00 window
       - cooldown_violation: immediate retry when last contact was within 30 minutes
     """
     total_recovered = Decimal("0")
@@ -143,7 +143,7 @@ def run_naive_multi_retry_constrained(
     but gated by the identical rules the policy engine enforces:
       - hard-stop failure codes get ZERO retries
       - retry attempt count is capped at MAX_RETRIES_PER_TXN
-      - DND contact window (08:00–21:00) is strictly respected
+      - DND contact window (09:00-21:00) is strictly respected
       - cooldown between consecutive attempts (30 min) is respected
     """
     total_recovered = Decimal("0")
@@ -165,7 +165,7 @@ def run_naive_multi_retry_constrained(
                 if 0 <= elapsed_min < COOLDOWN_MINUTES:
                     continue  # Cooldown active — cannot retry immediately
 
-            # Rule 4: DND window (08:00 - 21:00)
+            # Rule 4: DND window (09:00 - 21:00)
             simulated_hour = (txn.time_of_failure.hour + int(delay_hours)) % 24
             if simulated_hour < CONTACT_WINDOW_START_HOUR or simulated_hour >= CONTACT_WINDOW_END_HOUR:
                 continue  # Outside allowed window — cannot retry at this hour

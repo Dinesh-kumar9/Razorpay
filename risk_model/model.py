@@ -1,11 +1,16 @@
 """
-XGBoost uplift model — predicts P(recover | features, candidate_action).
+Multi-Action Recovery Recommendation Model -- predicts P(recover | features, candidate_action).
 
 Architecture decision: docs/adr/0004-uplift-model-design.md
 
 Design: single XGBoost classifier with candidate_action as a feature.
 At inference, the model is scored for all 4 candidate actions; the action
 with the highest predicted P(recover) is returned as the recommendation.
+
+Note on terminology: this is a multi-action recommendation model, not a causal
+uplift/treatment-effect estimator. 'Uplift' in the causal inference sense estimates
+the incremental treatment effect; this model selects the highest-P(recover) action
+from the scored candidates. The distinction is documented in ADR 0004.
 
 This is simpler and more sample-efficient than training 4 separate models,
 and it allows the model to learn cross-action correlations (e.g., if retry_now
@@ -37,7 +42,7 @@ TRAINING_SEED = 99  # different seed from simulation to avoid data leakage
 
 class RecoveryModel:
     """
-    Uplift-style XGBoost classifier for recovery action selection.
+    Multi-Action Recovery Recommendation Model (XGBoost-based).
 
     At inference, all 4 candidate actions are scored for a given transaction.
     The action with the highest P(recover) is recommended.
@@ -45,7 +50,6 @@ class RecoveryModel:
     SHAP values are computed per prediction for the winning action to produce
     the top-3 feature contributions fed to the LLM explanation layer.
     """
-
     def __init__(self) -> None:
         self._model: xgb.XGBClassifier | None = None
         self._shap_explainer: SHAPExplainer | None = None

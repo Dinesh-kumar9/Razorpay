@@ -65,6 +65,57 @@ class TestFeatureExtraction:
         assert len(lst) == len(FEATURE_NAMES)
         assert all(isinstance(x, (int, float)) for x in lst)
 
+    def test_is_outside_business_hours_boundary(self):
+        """
+        is_outside_business_hours must mirror WINDOW_001 (CONTACT_WINDOW_START_HOUR=9,
+        CONTACT_WINDOW_END_HOUR=21). Verify the corrected boundary: hour<9 => outside.
+
+        Regression test for the bug where the feature used hour<8 while the guardrail
+        used hour<9 (08:xx transactions were incorrectly marked as 'inside').
+        """
+        from datetime import UTC, datetime
+        from decimal import Decimal
+
+        from schemas.transaction import FailedTransaction, FailureCode, PaymentMethod
+
+        def make_txn_at_hour(hour: int) -> FailedTransaction:
+            return FailedTransaction(
+                txn_id=f"test-hour-{hour}",
+                amount_inr=Decimal("1000"),
+                failure_code=FailureCode.INSUFFICIENT_FUNDS,
+                payment_method=PaymentMethod.CARD,
+                retry_count_so_far=0,
+                customer_id="CUST-0001",
+                merchant_id="MERCH-001",
+                time_of_failure=datetime(2024, 8, 15, hour, 30, 0, tzinfo=UTC),
+                gateway_raw_error="DECLINE_51",
+                customer_contact_count_24h=0,
+            )
+
+        # Hour 8: OUTSIDE (08:xx < 09:00 boundary) — was wrong before the fix
+        fv_8 = extract_features(make_txn_at_hour(8))
+        assert fv_8.is_outside_business_hours == 1.0, (
+            "hour=8 must be classified as OUTSIDE business hours (< 09:00 boundary)"
+        )
+
+        # Hour 9: INSIDE (first inside hour)
+        fv_9 = extract_features(make_txn_at_hour(9))
+        assert fv_9.is_outside_business_hours == 0.0, (
+            "hour=9 must be classified as INSIDE business hours (>= 09:00 boundary)"
+        )
+
+        # Hour 20: INSIDE (last inside hour)
+        fv_20 = extract_features(make_txn_at_hour(20))
+        assert fv_20.is_outside_business_hours == 0.0, (
+            "hour=20 must be classified as INSIDE business hours (< 21:00 boundary)"
+        )
+
+        # Hour 21: OUTSIDE (first outside hour at end)
+        fv_21 = extract_features(make_txn_at_hour(21))
+        assert fv_21.is_outside_business_hours == 1.0, (
+            "hour=21 must be classified as OUTSIDE business hours (>= 21:00 boundary)"
+        )
+
 
 class TestModelTrainingAndInference:
     def test_train_predict_and_json_save(self, tmp_path: Path):

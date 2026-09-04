@@ -23,7 +23,7 @@
     <div class="override-alert-banner" role="alert" aria-live="polite">
       <div class="override-alert-header">
         <span class="rule-pill mono" data-rule-id="{{ record.guardrail_rule_id }}">{{ record.guardrail_rule_id }}</span>
-        <span class="override-alert-title">Statutory Policy Engine Veto Fired (Action Changed)</span>
+        <span class="override-alert-title">Policy Engine Guardrail Veto Fired (Action Changed)</span>
       </div>
       <div class="override-alert-reason">{{ record.override_reason }}</div>
     </div>
@@ -31,7 +31,7 @@
     <div class="mandated-alert-banner" role="alert" aria-live="polite">
       <div class="mandated-alert-header">
         <span class="rule-pill-mandated mono" data-rule-id="{{ record.guardrail_rule_id }}">{{ record.guardrail_rule_id }}</span>
-        <span class="mandated-alert-title">Statutory Rule Mandated (Model Independently Agreed)</span>
+        <span class="mandated-alert-title">Guardrail Rule Fired (Model Independently Agreed)</span>
       </div>
       <div class="override-alert-reason">{{ record.override_reason }}</div>
     </div>
@@ -78,7 +78,7 @@
         <div class="stage-meta">
           <span class="stage-number">2</span>
           <h3 class="stage-title">Risk Model Inference &amp; SHAP Feature Attributions</h3>
-          <span class="stage-role-tag role--ml">XGBoost Uplift</span>
+          <span class="stage-role-tag role--ml">Recovery Recommendation Model</span>
         </div>
 
         <div style="margin-bottom: 1.25rem;">
@@ -156,7 +156,7 @@
           <span class="rule-pill-mandated mono" data-rule-id="{{ record.guardrail_rule_id }}">{{ record.guardrail_rule_id }}</span>
         </div>
         <p style="margin-top:0.75rem;font-size:0.88rem;color:var(--color-paper-muted);">
-          Statutory rule <strong class="mono" style="color:var(--color-advisory)">{{ record.guardrail_rule_id }}</strong> mandated this action. The risk model independently reached the same conclusion; policy engine enforces this as binding statutory compliance.
+          Guardrail rule <strong class="mono" style="color:var(--color-advisory)">{{ record.guardrail_rule_id }}</strong> mandated this action. The risk model independently reached the same conclusion; policy engine enforces this as binding compliance.
         </p>
         {% else %}
         <!-- State 3: CONFIRMED -->
@@ -167,7 +167,7 @@
           <span class="action-confirmed-name" data-action="{{ record.final_action | upper }}" data-source="policy">{{ record.final_action | upper }}</span>
         </div>
         <p style="margin-top:0.75rem;font-size:0.88rem;color:var(--color-paper-muted);">
-          All statutory guardrail checks passed without veto. Proposed model action approved for execution.
+          All guardrail checks passed without veto. Proposed model action approved for execution.
         </p>
         {% endif %}
       </section>

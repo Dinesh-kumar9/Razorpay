@@ -1,7 +1,7 @@
 """
 Test suite for policy_engine — the hero component.
 
-Coverage target: ≥90% (enforced by CI gate).
+Coverage target: >=90% last measured; CI enforces a 75% global minimum.
 Every rule has explicit test cases for: trigger condition, boundary condition,
 and non-trigger condition. The "demo case" test is the one we show judges:
 model says retry_now, cooldown fires because customer was contacted 20 min ago.

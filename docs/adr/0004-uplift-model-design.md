@@ -1,4 +1,4 @@
-# ADR 0004 — Single XGBoost Uplift Model with Action as Feature
+# ADR 0004 -- Single XGBoost Multi-Action Recovery Recommendation Model with Action as Feature
 
 **Status:** Accepted
 **Date:** 2026-08-16
@@ -8,8 +8,13 @@
 
 ## Context
 
-An uplift model must estimate P(recover | transaction, action) for each of 4 candidate
-recovery actions: `retry_now`, `retry_delayed`, `nudge_alt_method`, `escalate_to_human`.
+The recovery recommendation model must estimate P(recover | transaction, action) for each
+of 4 candidate recovery actions: `retry_now`, `retry_delayed`, `nudge_alt_method`,
+`escalate_to_human`. It then selects the action with the highest predicted P(recover).
+
+Note on terminology: this is a multi-action recommendation model, not a causal
+uplift/treatment-effect estimator. The model scores each action and picks the best;
+it does not estimate the incremental effect of treatment vs. control.
 
 Two architectures are common:
 

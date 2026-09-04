@@ -9,7 +9,7 @@ Design decisions documented in docs/adr/0002-policy-engine-overrides-model.md:
   - Rules are evaluated in priority order by PolicyEngine.evaluate().
   - The first rule that fires wins; subsequent rules are not evaluated.
   - Hard-stop rules are checked BEFORE the model is even consulted.
-  - This file has ≥90% unit-test coverage (enforced by CI gate).
+  - This file has >=90% unit-test coverage (last measured; CI enforces 75% global minimum).
 """
 
 from __future__ import annotations
@@ -92,8 +92,11 @@ def check_OPT_OUT_001(
     constitutes a violation of DPDP Act 2023, Chapter III ("Rights of Data Principal"),
     specifically the right to withdraw consent at any time.
 
-    This rule is evaluated FIRST in RULE_PRIORITY so it cannot be superseded by
-    any downstream rule. The customer's withdrawal of consent is absolute.
+    This rule is evaluated SECOND in RULE_PRIORITY, immediately after HARD_STOP_001.
+    HARD_STOP_001 (RBI fraud/KYC mandatory escalation) has higher priority because
+    ESCALATE_TO_HUMAN is an internal compliance-routing action, not automated customer
+    contact, so DPDP Chapter III consent revocation does not apply to it.
+    See ADR 0008 for the full priority-ordering rationale.
     """
     if txn.customer_opted_out:
         return RuleResult(

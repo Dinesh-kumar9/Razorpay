@@ -53,7 +53,8 @@ addopts = [
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-# Per-module thresholds — policy_engine is the load-bearing component; 90% is enforced.
+# Per-module coverage note — policy_engine is the load-bearing component;
+# last measured >=90%. Global CI gate is 75% (--cov-fail-under=75 above).
 [tool.coverage.paths]
 policy_engine = ["policy_engine"]
 

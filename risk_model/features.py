@@ -4,6 +4,12 @@ Feature engineering — transforms FailedTransaction into numeric feature vector
 Each feature is documented with its derivation and why it's predictive.
 The feature set is designed to be explainable via SHAP: every feature maps
 to something a merchant ops analyst would recognise as meaningful.
+
+IMPORTANT — boundary alignment:
+  is_outside_business_hours uses the same 09:00–21:00 boundary as WINDOW_001
+  in policy_engine/rules.py (CONTACT_WINDOW_START_HOUR = 9, CONTACT_WINDOW_END_HOUR = 21).
+  If either boundary changes, both files must be updated together to keep the model
+  feature and the guardrail rule consistent.
 """
 
 from __future__ import annotations
@@ -121,7 +127,10 @@ def extract_features(txn: FailedTransaction) -> FeatureVector:
         contact_proximity = max(0.0, 1.0 - (minutes_since / 120.0))
 
     hour = txn.time_of_failure.hour
-    is_outside = float(hour < 8 or hour >= 21)
+    # Boundary mirrors WINDOW_001 in policy_engine/rules.py:
+    # CONTACT_WINDOW_START_HOUR = 9, CONTACT_WINDOW_END_HOUR = 21.
+    # Both must stay in sync — see module docstring.
+    is_outside = float(hour < 9 or hour >= 21)
 
     return FeatureVector(
         failure_code_category=float(FAILURE_CODE_CATEGORY.get(txn.failure_code, 2)),

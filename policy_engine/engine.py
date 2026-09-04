@@ -63,7 +63,7 @@ class PolicyEngine:
     and returns a policy decision. State (retry counts, contact counts) is
     embedded in the FailedTransaction, not tracked here.
 
-    Unit-test coverage ≥90% is enforced by CI (see pyproject.toml).
+    Unit-test coverage >=90% last measured; CI enforces 75% global minimum (see pyproject.toml).
     The tests for this class are the most important tests in the repo.
     """
 

@@ -30,7 +30,7 @@
 ```mermaid
 flowchart TD
     A["ingestion/\n(FailedTransaction generator)"]
-    B["risk_model/\n(XGBoost uplift model)\nscores 4 candidate actions"]
+    B["risk_model/\n(Multi-Action Recovery Recommendation Model)\nscores 4 candidate actions"]
     C["policy_engine/\n(8 guardrail rules, priority-ordered)\nFINAL AUTHORITY"]
     D["llm_layer/\n(Gemini 2.5 Flash)\nAdvisory explanation only"]
     E["execution/\n(Simulated Razorpay API executor)"]
@@ -68,28 +68,38 @@ See [ADR 0008](docs/adr/0008-guardrail-priority-ordering.md) for the full orderi
 
 ## Verified Results (seed=42, n=5,000)
 
+> **Simulation scope:** Because no public dataset combines payment failure codes with
+> recovery outcomes at transaction level, this proof-of-concept uses synthetic transaction
+> and recovery-outcome data grounded in published industry estimates (see
+> `docs/data_provenance.md`). The reported uplift therefore demonstrates relative
+> performance within the simulated environment and should not be interpreted as expected
+> production uplift without validation on real payment data. The strongest defensible
+> comparison is vs. the **constrained multi-retry baseline**, which applies the same
+> guardrail constraints but restricts recovery to retry-only (no nudge, no escalation).
+
 | Metric | Value | vs Baseline | Status |
 |---|---|---|---|
 | Total at-risk | Rs. 4,05,49,036 | -- | -- |
-| **Agent recovered** | **Rs. 95,06,439** | -- | **23.44% recovery rate** |
-| Single-attempt baseline | Rs. 18,53,479 | **+412.9%** | >= 20% target met |
-| Constrained multi-retry *(honest comparison)* | Rs. 50,04,245 | **+90.0%** | >= 20% target met |
-| Unconstrained multi-retry *(illegal -- 16,406 violations)* | Rs. 1,17,02,972 | -18.8% | DISQUALIFIED |
+| **Agent recovered** | **Rs. 95,25,989** | -- | **23.49% recovery rate** |
+| Single-attempt baseline | Rs. 18,53,479 | **+414.0%** | >= 20% target met |
+| Constrained multi-retry *(honest comparison)* | Rs. 50,04,245 | **+90.4%** | >= 20% target met |
+| Unconstrained multi-retry *(illegal -- 16,406 violations)* | Rs. 1,17,02,972 | -18.6% | DISQUALIFIED |
 | Stopping-rule violations | **0** | -- | PASS |
 | Explanation coverage | **100%** | -- | PASS |
 | False-escalation count | 0 (0.0%) | -- | PASS |
-| Genuine Guardrail Overrides (model != final) | **2,288 (45.76%)** | -- | Audited |
-| Statutory Rules Mandated (rule_mandated=True) | **3,813 (76.26%)** | -- | Enforced |
+| Genuine Guardrail Overrides (model != final) | **2,284 (45.68%)** | -- | Audited |
+| Guardrail Rules Fired (rule_mandated=True) | **3,809 (76.18%)** | -- | Enforced |
 | OPT_OUT_001 fired (consent revocation stops) | **93 (1.86%)** | -- | DPDP compliant |
-| COST_001 fired (value-destructive retry stops) | **14 (0.28%)** | -- | Economic guard |
+| COST_001 fired (value-destructive retry stops) | **21 (0.42%)** | -- | Economic guard |
 
 > **Why the unconstrained baseline is disqualified:** Blind multi-retry recovers more revenue
 > but commits 16,406 policy violations -- 6,438 retries on fraud/KYC-flagged cards (RBI),
 > 6,660 contacts outside 09:00-21:00 IST (TRAI DND), 2,961 exceeding max-retry caps, and
 > 347 cooldown breaches. This is the entire point of the guardrail system.
 
-> **Reproducible.** Run `python -m simulation.runner` with seed=42 to get identical numbers.
-> The CI `reproducibility` job verifies this on every push by running twice and diffing output.
+> **Reproducible.** Run `python -m simulation.runner --no-llm` with seed=42 to get identical
+> numbers. The CI `reproducibility` job verifies this on every push by running twice and
+> diffing output.
 
 > **Note on LLM Fallback Rate (100% in Batch Simulation):**
 > In the 5,000-transaction batch simulation and CI, all explanations are generated via the
@@ -105,12 +115,18 @@ See [ADR 0008](docs/adr/0008-guardrail-priority-ordering.md) for the full orderi
 ## Compliance Trade-off (Deliberate, Not a Regression)
 
 > Adding DPDP consent-revocation handling (`OPT_OUT_001`, 93 stops) and cost-threshold
-> guardrails (`COST_001`, 14 stops) reduced total recovered revenue by ~2.1%
-> (from Rs. 9,708,443 in v1 to Rs. 9,506,439 in v2). This is the correct outcome:
-> 107 transactions that previously reached a recovery action are now stopped because the
+> guardrails (`COST_001`, 21 stops) reduced total recovered revenue vs v1.
+> This is the correct outcome:
+> 114 transactions that previously reached a recovery action are now stopped because the
 > customer has explicitly revoked consent or because further retries would destroy more
 > value than they recover. Maximising revenue at the expense of consent rights or economic
 > rationality is not the goal.
+>
+> A further ~Rs.19,550 increase in recovered revenue (vs the previously published
+> Rs.9,506,439) results from the hour=8 feature boundary correction (item 1 of the
+> submission fixes): the model now correctly classifies 08:xx transactions as outside
+> business hours, matching the WINDOW_001 guardrail boundary, and makes better action
+> choices for those transactions as a result.
 
 ---
 
@@ -180,7 +196,7 @@ These are **deliberate exclusions**, not gaps:
 - **e-Mandate / subscription-specific failure codes** (`mandate_not_found`,
   `pre_debit_notification_pending`, `mandate_max_amount_exceeded`, etc.) -- Identified as a
   high-value extension during development but deliberately deferred: implementing these codes
-  requires retraining the XGBoost uplift model with updated feature encodings and re-verifying
+  requires retraining the Multi-Action Recovery Recommendation Model with updated feature encodings and re-verifying
   all published batch metrics, which would have invalidated the reproducible seed=42 results
   at submission time. This is a scoping decision, not an oversight.
 
@@ -205,7 +221,7 @@ server to enable live Gemini explanations in the single-transaction simulator.
 project-meridian/
 +-- schemas/         Pydantic contracts (the API of every component)
 +-- ingestion/       Synthetic transaction generator
-+-- risk_model/      XGBoost uplift model + SHAP explainer
++-- risk_model/      Multi-Action Recovery Recommendation Model + SHAP explainer
 +-- policy_engine/   Guardrail rules (the load-bearing component)
 +-- llm_layer/       Google Gemini 2.5 Flash + deterministic template fallback
 +-- execution/       Simulated Razorpay API executor

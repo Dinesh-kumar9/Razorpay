@@ -1,4 +1,4 @@
-﻿# Project Meridian â€” Architecture
+# Project Meridian â€” Architecture
 
 > **Bounded AI agent for failed-payment revenue recovery.**  
 > Razorpay AI Buildathon 2025, Track 3.
@@ -42,9 +42,13 @@ flowchart TD
 **File:** [`ingestion/generator.py`](ingestion/generator.py) (see also [`schemas/transaction.py`](schemas/transaction.py))  
 Generates realistic, synthetic failed payment transactions (`FailedTransaction`) with parameterized noise and realistic distributions across failure codes (soft declines, hard stops, technical errors), amounts, payment methods, time of day, and retry histories. Follows synthetic data provenance documented in [`docs/data_provenance.md`](docs/data_provenance.md).
 
-### 2. `risk_model/` â€” Feature Extraction & XGBoost Uplift Model
+### 2. `risk_model/` -- Feature Extraction & Multi-Action Recovery Recommendation Model
 **Files:** [`risk_model/features.py`](risk_model/features.py), [`risk_model/model.py`](risk_model/model.py), [`risk_model/recovery_rates.py`](risk_model/recovery_rates.py)  
-Extracts 8 deterministic features from incoming transactions and scores 4 candidate recovery actions using an XGBoost classifier trained on context-adjusted recovery rates. Generates local SHAP feature contributions (`shap_explainer.py`) explaining the statistical drivers behind the recommended action. Model is persisted safely in XGBoost native JSON format.
+Extracts 8 deterministic features from incoming transactions and scores 4 candidate recovery
+actions using an XGBoost classifier (see ADR 0004). The model selects the highest-P(recover)
+action -- this is a multi-action recommendation model, not a causal uplift estimator.
+Generates local SHAP feature contributions (`shap_explainer.py`) explaining the statistical
+drivers behind the recommended action. Model is persisted in XGBoost native JSON format.
 
 ### 3. `policy_engine/` â€” Deterministic Policy Guardrails (Final Authority)
 **Files:** [`policy_engine/engine.py`](policy_engine/engine.py), [`policy_engine/rules.py`](policy_engine/rules.py)  
@@ -100,7 +104,7 @@ simulation/runner.py:run_single()
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
 | **LLM Explainer** | Google Gemini 2.5 Flash (`google-genai`) | Native schema constraints (`response_schema`), sub-3s latency, single-provider architecture |
-| **Risk / Uplift Model** | XGBoost + SHAP | High interpretability, non-linear feature interactions, fast CPU inference |
+| **Recommendation Model** | XGBoost + SHAP | Multi-action scoring (P(recover | features, action)), high interpretability, fast CPU inference |
 | **Policy Engine** | Pure Python Rules | Deterministic regulatory compliance (RBI FRM, DPDP, TRAI DND), zero framework risk |
 | **Audit Storage** | SQLite (Append-only) | Immutable structured audit log with parameterized queries |
 | **API & UI** | FastAPI + Jinja2 + HTMX | Server-rendered, minimal client state, real-time live dashboard |

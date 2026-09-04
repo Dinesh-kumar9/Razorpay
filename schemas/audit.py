@@ -170,11 +170,11 @@ class BatchMetrics(BaseModel):
     override_rate_pct: float
     rule_mandated_count: int = Field(
         default=0,
-        description="Number of times a statutory guardrail rule fired (whether overriding or concurring with model)",
+        description="Number of times a guardrail rule fired (whether overriding or concurring with model)",
     )
     rule_mandated_rate_pct: float = Field(
         default=0.0,
-        description="% of transactions where a statutory guardrail rule fired",
+        description="% of transactions where a guardrail rule fired",
     )
 
     # LLM health

@@ -2,7 +2,7 @@
 LLM explanation client -- single-provider, advisory-only, never blocks the pipeline.
 
 Attempt order:
-  1. Google Gemini (gemini-2.5-flash) via google-genai SDK
+  1. Google Gemini (gemini-2.5-flash-latest) via google-genai SDK
   2. Deterministic template fallback (llm_layer/fallback.py)
 
 This client has one contract: given a policy decision and context, return a
@@ -36,9 +36,10 @@ from schemas.explanation import LLMExplanation
 logger = logging.getLogger(__name__)
 
 # -- Provider constants -------------------------------------------------------
-# gemini-2.5-flash: valid production model identifier (google-genai SDK)
-# Published Google AI Studio model list: gemini-2.5-flash
-GEMINI_MODEL: str = "gemini-2.5-flash"
+# gemini-2.5-flash-latest: current stable alias (google-genai SDK).
+# Updated from gemini-2.5-flash which was deprecated for new users.
+# See: https://ai.google.dev/gemini-api/docs/models
+GEMINI_MODEL: str = "gemini-2.5-flash-latest"
 
 MAX_TOKENS: int = 1000
 TIMEOUT_SECONDS: float = 5.0  # fail fast -> template reached quickly

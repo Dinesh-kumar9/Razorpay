@@ -102,7 +102,7 @@ class PolicyDecision(BaseModel):
     )
     rule_mandated: bool = Field(
         default=False,
-        description="True if a statutory guardrail rule fired, regardless of whether it substituted a different action",
+        description="True if a guardrail rule fired, regardless of whether it substituted a different action",
     )
     override_reason: str | None = Field(
         default=None,

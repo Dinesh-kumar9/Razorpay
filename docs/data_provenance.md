@@ -11,3 +11,13 @@ All transaction data used in this simulation is **synthetically generated**. No 
 **Generation methodology**: `ingestion/generator.py` uses Python's `random.Random` seeded at `random_seed=42` (default). All randomness in the simulation flows through this seed. Running `python -m simulation.runner` with seed 42 reproduces the exact metrics reported in `README.md`.
 
 This document exists because judges will not forgive undisclosed synthetic data — we state it explicitly, cite our sources, and make the generation code fully auditable.
+
+**Simulation scope and circularity:** The Multi-Action Recovery Recommendation Model trains on
+Bernoulli-sampled outcomes drawn from `RECOVERY_RATES` (in `risk_model/recovery_rates.py`),
+and the batch simulation evaluates performance using the same underlying rate distribution.
+This is a necessary consequence of the absence of a public dataset combining Indian payment
+failure codes with per-action recovery outcomes at transaction level. The reported uplift
+demonstrates relative performance within the simulated environment and should not be
+interpreted as expected production uplift without validation on real payment data.
+The strongest defensible comparison is the constrained multi-retry baseline, which applies
+identical guardrail constraints but restricts action choice to retries only (no nudge/escalation).

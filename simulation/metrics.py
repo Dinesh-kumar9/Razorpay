@@ -87,7 +87,7 @@ def compute_metrics(
     overrides = sum(bool(r.was_overridden) for r in records)
     override_rate = float(overrides / n * 100)
 
-    # Statutory rule mandated tracking (all guardrail rule activations)
+    # Guardrail rule fired tracking (all guardrail rule activations, statutory and internal)
     mandated = sum(bool(getattr(r, "rule_mandated", False) or r.guardrail_rule_id) for r in records)
     mandated_rate = float(mandated / n * 100)
 
