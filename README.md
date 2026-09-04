@@ -58,6 +58,14 @@ HTMX Dashboard (FastAPI + Jinja2)
 | OPT_OUT_001 fired (consent revocation stops) | **93 (1.86%)** | — | ✅ DPDP compliant |
 | COST_001 fired (value-destructive retry stops) | **14 (0.28%)** | — | ✅ Economic guard |
 
+> **Compliance trade-off (deliberate, not a regression):** Adding DPDP consent-revocation
+> handling (`OPT_OUT_001`, 93 stops) and cost-threshold guardrails (`COST_001`, 14 stops)
+> reduced total recovered revenue by ~2.1% (from Rs.9,708,443 in v1 to Rs.9,506,439 in v2).
+> This is the correct outcome: 107 transactions that previously reached a recovery action
+> are now stopped because the customer has explicitly revoked consent or because further
+> retries would destroy more value than they recover. Maximising revenue at the expense of
+> consent rights or economic rationality is not the goal.
+
 > **Why the unconstrained baseline is disqualified:** Blind multi-retry recovers more revenue but
 > commits 16,406 policy violations — 6,438 retries on fraud/KYC-flagged cards (RBI), 6,660
 > contacts outside 09:00–21:00 IST (TRAI DND), 2,961 exceeding max-retry caps, and 347 cooldown
