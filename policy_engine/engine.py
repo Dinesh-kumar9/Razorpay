@@ -16,8 +16,10 @@ from collections.abc import Callable
 from policy_engine.rules import (
     RuleResult,
     check_COOLDOWN_001,
+    check_COST_001,
     check_HARD_STOP_001,
     check_HARD_STOP_002,
+    check_OPT_OUT_001,
     check_RATE_LIMIT_001,
     check_RATE_LIMIT_002,
     check_WINDOW_001,
@@ -29,10 +31,14 @@ from schemas.transaction import FailedTransaction
 RuleFn = Callable[[FailedTransaction, RecoveryAction], RuleResult | None]
 
 # Priority-ordered list of rule functions.
-# Hard-stop rules are first — they fire before the model is consulted.
-# Rate-limit rules are second — they fire if the hard stops don't.
+# OPT_OUT_001 is first — consent revocation is absolute and overrides everything.
+# COST_001 is second — value-destructive recovery stops before any other action.
+# Hard-stop rules are third — they fire before the model is consulted.
+# Rate-limit rules are fourth — they fire if the hard stops don't.
 # Cooldown and window rules are last — they apply only to remaining cases.
 RULE_PRIORITY: list[RuleFn] = [
+    check_OPT_OUT_001,
+    check_COST_001,
     check_HARD_STOP_001,
     check_HARD_STOP_002,
     check_RATE_LIMIT_001,

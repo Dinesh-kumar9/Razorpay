@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC
+from decimal import Decimal
 
 from schemas.decision import RecoveryAction
 from schemas.transaction import HARD_STOP_CODES, NO_RETRY_CODES, FailedTransaction
@@ -53,6 +54,14 @@ outside 9 AM–9 PM IST. Condition: hour >= 21 or hour < 9 → WINDOW_001 fires.
 DEFAULT_RETRY_DELAY_MINUTES: int = 60
 NEXT_WINDOW_DELAY_MINUTES: int = 480  # ~8 hours to next business window
 
+COST_THRESHOLD_PCT: float = 0.05
+"""
+Maximum recovery cost as a fraction of transaction amount before COST_001 fires.
+Rationale: gateway fees on repeated retries can exceed the recovered value for
+low-value transactions. At 5%, recovery is still economically justified.
+Above this, further automated retries are value-destructive.
+"""
+
 
 # ── RuleResult ─────────────────────────────────────────────────────────────────
 
@@ -65,6 +74,75 @@ class RuleResult:
     override_action: RecoveryAction
     reason: str
     retry_delay_minutes: int | None = None
+
+
+# ── Consent / cost stop rules ─────────────────────────────────────────────────
+
+
+def check_OPT_OUT_001(
+    txn: FailedTransaction,
+    proposed_action: RecoveryAction,  # noqa: ARG001
+) -> RuleResult | None:
+    """
+    Hard stop: customer has explicitly revoked consent for automated recovery contact.
+
+    When customer_opted_out=True, ALL automated recovery is halted immediately,
+    regardless of the action the model or any other rule would produce. This is
+    a consent hard-stop: continuing automated contact after an explicit opt-out
+    constitutes a violation of DPDP Act 2023, Chapter III ("Rights of Data Principal"),
+    specifically the right to withdraw consent at any time.
+
+    This rule is evaluated FIRST in RULE_PRIORITY so it cannot be superseded by
+    any downstream rule. The customer's withdrawal of consent is absolute.
+    """
+    if txn.customer_opted_out:
+        return RuleResult(
+            rule_id="OPT_OUT_001",
+            override_action=RecoveryAction.STOP,
+            reason=(
+                f"Customer '{txn.customer_id}' has revoked consent for automated recovery contact. "
+                f"All automated recovery is halted immediately per DPDP Act 2023, Chapter III. "
+                f"No further automated action will be taken on this transaction."
+            ),
+        )
+    return None
+
+
+def check_COST_001(
+    txn: FailedTransaction,
+    proposed_action: RecoveryAction,
+) -> RuleResult | None:
+    """
+    Cost threshold: stop automated recovery when cumulative gateway costs exceed
+    COST_THRESHOLD_PCT of the transaction amount.
+
+    Rationale: for low-value transactions, repeated gateway retries (each incurring
+    a processing fee) can cause the total recovery cost to exceed the recoverable
+    value. COST_001 stops further automated retries once the cost-to-recover ratio
+    exceeds 5% of the transaction amount, preserving net recovered value.
+
+    Only fires when a retry action is proposed (nudge/escalate do not incur
+    incremental gateway fees and are not blocked by this rule).
+    """
+    retry_actions = {RecoveryAction.RETRY_NOW, RecoveryAction.RETRY_DELAYED}
+    if proposed_action not in retry_actions:
+        return None
+    if txn.recovery_cost_inr <= Decimal("0"):
+        return None  # no costs incurred yet
+
+    threshold = txn.amount_inr * Decimal(str(COST_THRESHOLD_PCT))
+    if txn.recovery_cost_inr > threshold:
+        return RuleResult(
+            rule_id="COST_001",
+            override_action=RecoveryAction.STOP,
+            reason=(
+                f"Cumulative recovery cost (Rs.{txn.recovery_cost_inr:.2f}) exceeds "
+                f"{COST_THRESHOLD_PCT * 100:.0f}% of transaction amount "
+                f"(Rs.{txn.amount_inr:.2f}). Further retries are value-destructive. "
+                f"Stopping automated recovery to preserve net recovered value."
+            ),
+        )
+    return None
 
 
 # ── Hard-stop rules ────────────────────────────────────────────────────────────

@@ -24,7 +24,8 @@ Your ONLY output must be a valid JSON object matching EXACTLY this schema:
 {
   "rationale": "<string, max 400 chars: why this recovery action was chosen, in plain English for a merchant ops analyst>",
   "confidence_caveat": "<string, max 200 chars: one limitation or uncertainty the merchant should know>",
-  "fallback_if_wrong": "<string, max 200 chars: what the system will do if this action fails to recover the payment>"
+  "fallback_if_wrong": "<string, max 200 chars: what the system will do if this action fails to recover the payment>",
+  "customer_message_hinglish": "<string or null, max 300 chars: short customer-facing message in Hinglish (Hindi-English mix) for SMS/WhatsApp; null if action is escalate_to_human or stop>"
 }
 
 Rules:
@@ -33,6 +34,7 @@ Rules:
 - Use INR (₹) for any amount references.
 - The rationale must be specific to the failure code and action provided, not generic.
 - If the action was overridden by a compliance rule, explain BOTH what the model wanted AND why the rule overrode it.
+- For customer_message_hinglish: write in a warm, friendly Hinglish tone (e.g. "Namaste! Aapka ₹{amount} ka payment..."). Must be ≤300 chars. Set to null for escalate_to_human or stop actions.
 """
 
 

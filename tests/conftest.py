@@ -27,6 +27,8 @@ def make_txn(
     hour_of_day: int = 14,  # 2pm — safely inside contact window
     amount: Decimal = Decimal("2500.00"),
     is_subscription: bool = False,
+    customer_opted_out: bool = False,
+    recovery_cost_inr: Decimal = Decimal("0"),
 ) -> FailedTransaction:
     """
     Build a FailedTransaction with safe defaults.
@@ -50,6 +52,8 @@ def make_txn(
         customer_contact_count_24h=contact_count_24h,
         last_contact_time=last_contact,
         is_subscription=is_subscription,
+        customer_opted_out=customer_opted_out,
+        recovery_cost_inr=recovery_cost_inr,
     )
 
 

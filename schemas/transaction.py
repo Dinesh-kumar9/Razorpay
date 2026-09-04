@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class FailureCode(str, Enum):
@@ -110,3 +110,27 @@ class FailedTransaction(BaseModel):
         default=False,
         description="True for recurring/subscription payments — affects retry urgency",
     )
+    customer_opted_out: bool = Field(
+        default=False,
+        description=(
+            "True if the customer has explicitly revoked consent for automated recovery contact. "
+            "When True, OPT_OUT_001 fires immediately and stops all automated recovery — "
+            "consent revocation is a hard stop per DPDP Act 2023 Chapter III."
+        ),
+    )
+    recovery_cost_inr: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        description=(
+            "Cumulative gateway/processing cost already incurred for this recovery attempt, in INR. "
+            "When this exceeds COST_THRESHOLD_PCT of amount_inr, COST_001 fires and stops "
+            "further automated recovery to prevent value-destructive retries."
+        ),
+    )
+
+    @field_validator("recovery_cost_inr")
+    @classmethod
+    def recovery_cost_non_negative(cls, v: Decimal) -> Decimal:
+        if v < Decimal("0"):
+            raise ValueError("recovery_cost_inr must be >= 0")
+        return v

@@ -113,6 +113,36 @@ _OVERRIDE_RATIONALE_PREFIX: dict[str, str] = {
         "Customer contact is not permitted outside 8am–9pm. "
         "The nudge was rescheduled to the next permitted contact window. "
     ),
+    "OPT_OUT_001": (
+        "The customer has revoked consent for automated recovery contact. "
+        "All automated recovery has been halted per DPDP Act 2023. "
+    ),
+    "COST_001": (
+        "The cumulative gateway cost for this recovery attempt exceeds the economic threshold. "
+        "Further automated retries would be value-destructive; recovery has been stopped. "
+    ),
+}
+
+# Hinglish customer-facing SMS/WhatsApp message templates.
+# Only populated for actions that involve outbound customer contact.
+# STOP and ESCALATE_TO_HUMAN do not send customer messages — value is None.
+_HINGLISH_CUSTOMER_MSG: dict[RecoveryAction, str | None] = {
+    RecoveryAction.RETRY_NOW: (
+        "Namaste! Aapka ₹{amount:.0f} ka payment fail ho gaya. "
+        "Hum abhi dobara try kar rahe hain. "
+        "Agar phir bhi fail ho toh kripya apna balance check karein."
+    ),
+    RecoveryAction.RETRY_DELAYED: (
+        "Namaste! Aapka ₹{amount:.0f} ka payment abhi process nahi hua. "
+        "Hum thodi der baad automatically retry karenge. "
+        "Koi action ki zaroorat nahi — hum aapko update karenge."
+    ),
+    RecoveryAction.NUDGE_ALT_METHOD: (
+        "Namaste! Aapka ₹{amount:.0f} ka payment complete nahi hua. "
+        "Kripya UPI, Net Banking ya doosra card try karein: {payment_link}"
+    ),
+    RecoveryAction.ESCALATE_TO_HUMAN: None,
+    RecoveryAction.STOP: None,
 }
 
 
@@ -120,11 +150,13 @@ def get_fallback_explanation(
     policy_decision: PolicyDecision,
     shap_features: list[SHAPFeature],
     failure_code: str,
+    amount_inr: float = 0.0,
 ) -> LLMExplanation:
     """
     Build a deterministic LLMExplanation from templates.
 
     This is guaranteed to succeed. Called when the LLM path fails for any reason.
+    The optional `amount_inr` parameter is used to fill the Hinglish message template.
     """
     action = policy_decision.final_action
     top_feature = shap_features[0].feature_name if shap_features else "payment history"
@@ -148,9 +180,23 @@ def get_fallback_explanation(
     caveat = _CAVEAT_TEMPLATES.get(action, "Outcomes are based on historical patterns and not guaranteed.")[:200]
     fallback = _FALLBACK_TEMPLATES.get(action, "No further automated action will be taken.")[:200]
 
+    # Build Hinglish customer message (None for STOP / ESCALATE_TO_HUMAN)
+    hinglish_template = _HINGLISH_CUSTOMER_MSG.get(action)
+    if hinglish_template is not None:
+        try:
+            hinglish_msg: str | None = hinglish_template.format(
+                amount=amount_inr,
+                payment_link="pay.razorpay.com/retry",
+            )[:300]
+        except (KeyError, ValueError):
+            hinglish_msg = None
+    else:
+        hinglish_msg = None
+
     return LLMExplanation(
         rationale=rationale,
         confidence_caveat=caveat,
         fallback_if_wrong=fallback,
         source="template",
+        customer_message_hinglish=hinglish_msg,
     )

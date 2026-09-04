@@ -123,6 +123,8 @@ uvicorn api.main:app --reload --port 8000
 
 | Rule ID | Trigger | Override |
 |---|---|---|
+| `OPT_OUT_001` | customer_opted_out=True | → STOP (DPDP consent revocation — absolute) |
+| `COST_001` | recovery_cost_inr > 5% of amount | → STOP (value-destructive retry prevention) |
 | `HARD_STOP_001` | card_blocked, fraud_flag, kyc_hold, stolen_card | â†’ escalate_to_human (RBI) |
 | `HARD_STOP_002` | card_expired, invalid_card + retry action | â†’ nudge_alt_method |
 | `RATE_LIMIT_001` | retry_count â‰¥ 3 + retry action | â†’ STOP |
@@ -168,12 +170,15 @@ project-meridian/
 
 These are **deliberate exclusions**, not gaps:
 
-- **Real customer contact** â€” SMS/WhatsApp/email are simulated only (logged as "would send"), not sent. Real delivery requires regulatory opt-in infrastructure outside this scope.
-- **Fraud detection** â€” That is Track 2. This system consumes fraud signals (e.g., `fraud_flag` â†’ hard stop) but does not produce them.
-- **Checkout abandonment / overdue receivables** â€” These are valid future tracks; they require different action spaces and different data schemas. Mentioned in `docs/adr/0001`.
-- **Multi-currency / international failure codes** â€” INR and Indian bank failure codes only.
-- **Production traffic** â€” Synthetic data only, explicitly cited in `docs/data_provenance.md`.
-- **Unbounded LLM actions** â€” By design. The LLM has no path to execution, even a mediated one.
+- **Real customer contact** — SMS/WhatsApp/email are simulated only (logged as "would send"), not sent. Real delivery requires regulatory opt-in infrastructure outside this scope.
+- **Fraud detection** — That is Track 2. This system consumes fraud signals (e.g., `fraud_flag` → hard stop) but does not produce them.
+- **Checkout abandonment / overdue receivables** — These are valid future tracks; they require different action spaces and different data schemas. Mentioned in `docs/adr/0001`.
+- **Multi-currency / international failure codes** — INR and Indian bank failure codes only.
+- **Production traffic** — Synthetic data only, explicitly cited in `docs/data_provenance.md`.
+- **Unbounded LLM actions** — By design. The LLM has no path to execution, even a mediated one.
+- **e-Mandate / subscription-specific failure codes** (`mandate_not_found`, `pre_debit_notification_pending`, `mandate_max_amount_exceeded`, etc.) — Identified as a high-value extension during development but deliberately deferred: implementing these codes requires retraining the XGBoost uplift model with updated feature encodings and re-verifying all published batch metrics, which would have invalidated the reproducible seed=42 results at submission time. This is a scoping decision, not an oversight.
+
+
 
 ---
 

@@ -1,4 +1,4 @@
-﻿"""
+"""
 LLM explanation client -- single-provider, advisory-only, never blocks the pipeline.
 
 Attempt order:
@@ -193,4 +193,4 @@ class LLMExplainer:
 
         # Always-succeeds template fallback (ADR 0005)
         logger.info("FALLBACK provider=template")
-        return get_fallback_explanation(policy_decision, shap_features, failure_code)
+        return get_fallback_explanation(policy_decision, shap_features, failure_code, float(amount_inr))
