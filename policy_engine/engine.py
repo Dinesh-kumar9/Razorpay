@@ -31,15 +31,22 @@ from schemas.transaction import FailedTransaction
 RuleFn = Callable[[FailedTransaction, RecoveryAction], RuleResult | None]
 
 # Priority-ordered list of rule functions.
-# OPT_OUT_001 is first — consent revocation is absolute and overrides everything.
-# COST_001 is second — value-destructive recovery stops before any other action.
-# Hard-stop rules are third — they fire before the model is consulted.
-# Rate-limit rules are fourth — they fire if the hard stops don't.
-# Cooldown and window rules are last — they apply only to remaining cases.
+# See ADR 0008 for the full priority-ordering rationale.
+#
+# HARD_STOP_001 is FIRST — RBI fraud/KYC/stolen-card escalation is a statutory
+# obligation that supersedes DPDP consent revocation. ESCALATE_TO_HUMAN is an
+# internal compliance routing action (not automated customer contact), so DPDP
+# Chapter III consent revocation does not apply.
+#
+# OPT_OUT_001 is SECOND — consent revocation halts all automated recovery contact
+# (retries, nudges) once fraud hard-stops have been handled.
+#
+# COST_001 is THIRD — economic stopping only applies if consent is valid.
+# Remaining rules apply in compliance-priority order.
 RULE_PRIORITY: list[RuleFn] = [
-    check_OPT_OUT_001,
-    check_COST_001,
-    check_HARD_STOP_001,
+    check_HARD_STOP_001,   # RBI fraud/KYC mandatory escalation — supersedes consent
+    check_OPT_OUT_001,     # DPDP consent revocation — stops automated recovery contact
+    check_COST_001,        # Economic stop — value-destructive retry prevention
     check_HARD_STOP_002,
     check_RATE_LIMIT_001,
     check_RATE_LIMIT_002,

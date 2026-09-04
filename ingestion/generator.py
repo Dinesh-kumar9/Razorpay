@@ -133,16 +133,27 @@ def generate_transactions(
     Generate n synthetic failed transactions using the documented failure-code
     distribution. Every field is generated from realistic ranges:
 
-    - amount_inr: log-uniform between ₹100 and ₹50,000 (covers small UPI to large card)
-    - retry_count_so_far: 0–2 for most, rarely 3 (so guardrail edge cases appear naturally)
+    - amount_inr: log-uniform between Rs.100 and Rs.50,000 (covers small UPI to large card)
+    - retry_count_so_far: 0-2 for most, rarely 3 (so guardrail edge cases appear naturally)
     - customer_contact_count_24h: 0 or 1 for most customers
     - time_of_failure: uniformly distributed over the last 7 days, covering all hours
     - last_contact_time: set for ~40% of transactions (those with prior contact)
+    - customer_opted_out: ~2.5% of customers have revoked automated recovery consent
+    - recovery_cost_inr: 2% of amount per prior retry attempt (simulates gateway fees)
+      retry_count=1 -> 2% (below 5% COST_001 threshold)
+      retry_count=2 -> 4% (below 5% COST_001 threshold)
+      retry_count=3 -> 6% (ABOVE 5% COST_001 threshold -> COST_001 fires)
+
+    The main rng stream (random_seed) is unchanged from the pre-field-addition version.
+    The two new fields use a separate secondary_rng (seeded random_seed + 1000) so the
+    existing transaction data (failure codes, amounts, timestamps) is not perturbed.
 
     The output is deterministic for a given random_seed.
-    Default seed=42 produces the exact metrics reported in README.md.
+    Default seed=42 produces the batch metrics reported in README.md (post v2 update).
     """
     rng = random.Random(random_seed)
+    # Secondary RNG exclusively for new fields — does NOT affect the main rng stream
+    secondary_rng = random.Random(random_seed + 1000)
     transactions: list[FailedTransaction] = []
 
     # Simulate over a 7-day window ending now
@@ -180,6 +191,21 @@ def generate_transactions(
         # ~15% of transactions are subscriptions
         is_subscription = rng.random() < 0.15
 
+        # ── New fields (secondary_rng — does not touch the main rng stream) ────
+
+        # ~2.5% of customers have explicitly revoked automated recovery consent
+        # (simulates DPDP opt-out rate observed in customer preference data)
+        customer_opted_out = secondary_rng.random() < 0.025
+
+        # Cumulative gateway/processing cost from prior retry attempts.
+        # Approximate 2% of transaction amount per prior retry (gateway processing fee).
+        # At retry_count=3 (6% cumulative), this crosses the COST_001 threshold (5%),
+        # making further automated retries value-destructive.
+        if retry_count > 0:
+            recovery_cost_inr = amount * Decimal("0.02") * retry_count
+        else:
+            recovery_cost_inr = Decimal("0")
+
         txn = FailedTransaction(
             txn_id=f"TXN-{i:05d}-{random_seed}",
             amount_inr=amount,
@@ -193,6 +219,8 @@ def generate_transactions(
             customer_contact_count_24h=contact_count_24h,
             last_contact_time=last_contact_time,
             is_subscription=is_subscription,
+            customer_opted_out=customer_opted_out,
+            recovery_cost_inr=recovery_cost_inr,
         )
         transactions.append(txn)
 

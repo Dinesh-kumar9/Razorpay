@@ -75,9 +75,28 @@ class TestOptOut001:
         assert result is not None
         assert txn.customer_id in result.reason
 
-    def test_opted_out_takes_priority_over_hard_stop(self) -> None:
+    def test_hard_stop_takes_priority_over_opt_out(self) -> None:
+        """
+        HARD_STOP_001 fires BEFORE OPT_OUT_001 (see ADR 0008).
+
+        Rationale: ESCALATE_TO_HUMAN is an internal compliance routing action,
+        not automated recovery contact to the customer. DPDP consent revocation
+        (DPDP Act 2023, Chapter III) governs commercial automated contact to the
+        data principal — it does not apply to mandatory RBI fraud escalation.
+        A customer cannot opt out of having a stolen-card/fraud-flag case
+        escalated to human fraud review.
+        """
         eng = PolicyEngine()
         txn = make_txn(failure_code=FailureCode.CARD_BLOCKED, customer_opted_out=True)
+        decision = eng.evaluate(txn, make_model_decision(txn, action=RecoveryAction.RETRY_NOW))
+        # HARD_STOP_001 must win — statutory RBI obligation supersedes DPDP consent
+        assert decision.guardrail_rule_id == "HARD_STOP_001"
+        assert decision.final_action == RecoveryAction.ESCALATE_TO_HUMAN
+
+    def test_opted_out_fires_for_non_hard_stop_code(self) -> None:
+        """OPT_OUT_001 fires correctly for soft-decline codes (no HARD_STOP_001 competition)."""
+        eng = PolicyEngine()
+        txn = make_txn(failure_code=FailureCode.INSUFFICIENT_FUNDS, customer_opted_out=True)
         decision = eng.evaluate(txn, make_model_decision(txn, action=RecoveryAction.RETRY_NOW))
         assert decision.guardrail_rule_id == "OPT_OUT_001"
         assert decision.final_action == RecoveryAction.STOP

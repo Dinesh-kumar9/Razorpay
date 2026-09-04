@@ -46,15 +46,17 @@ HTMX Dashboard (FastAPI + Jinja2)
 | Metric | Value | vs Baseline | Status |
 |---|---|---|---|
 | Total at-risk | ₹4,05,49,036 | — | — |
-| **Agent recovered** | **₹97,08,443** | — | **23.94% recovery** |
-| Single-attempt baseline | ₹18,53,479 | **+423.8%** ✅ | ≥20% target |
-| Constrained multi-retry *(honest comparison)* | ₹50,04,245 | **+94.0%** ✅ | ≥20% target |
-| Unconstrained multi-retry *(illegal — 16,406 violations)* | ₹1,17,02,972 | −17.0% | ❌ disqualified |
+| **Agent recovered** | **₹95,06,439** | — | **23.44% recovery** |
+| Single-attempt baseline | ₹18,53,479 | **+412.9%** ✅ | ≥20% target |
+| Constrained multi-retry *(honest comparison)* | ₹50,04,245 | **+90.0%** ✅ | ≥20% target |
+| Unconstrained multi-retry *(illegal — 16,406 violations)* | ₹1,17,02,972 | −18.8% | ❌ disqualified |
 | Stopping-rule violations | **0** | — | ✅ PASS |
 | Explanation coverage | **100%** | — | ✅ PASS |
 | False-escalation count | 0 (0.0%) | — | ✅ PASS |
-| **Genuine Guardrail Overrides** (`model != final`) | **2,254 (45.1%)** | — | ✅ Audited |
-| **Statutory Rules Mandated** (`rule_mandated=True`) | **3,779 (75.6%)** | — | ✅ Enforced |
+| **Genuine Guardrail Overrides** (`model != final`) | **2,288 (45.76%)** | — | ✅ Audited |
+| **Statutory Rules Mandated** (`rule_mandated=True`) | **3,813 (76.26%)** | — | ✅ Enforced |
+| OPT_OUT_001 fired (consent revocation stops) | **93 (1.86%)** | — | ✅ DPDP compliant |
+| COST_001 fired (value-destructive retry stops) | **14 (0.28%)** | — | ✅ Economic guard |
 
 > **Why the unconstrained baseline is disqualified:** Blind multi-retry recovers more revenue but
 > commits 16,406 policy violations — 6,438 retries on fraud/KYC-flagged cards (RBI), 6,660
@@ -116,21 +118,24 @@ uvicorn api.main:app --reload --port 8000
 | [0005](docs/adr/0005-llm-fallback-design.md) | Schema-validate-or-template fallback (Gemini 2.5 Flash) |
 | [0006](docs/adr/0006-htmx-dashboard.md) | HTMX server-rendered dashboard |
 | [0007](docs/adr/0007-no-agent-framework.md) | No agent framework |
+| [0008](docs/adr/0008-guardrail-priority-ordering.md) | Guardrail rule priority ordering (HARD_STOP_001 vs OPT_OUT_001 vs COST_001) |
 
 ---
 
 ## Guardrail Rules
 
-| Rule ID | Trigger | Override |
-|---|---|---|
-| `OPT_OUT_001` | customer_opted_out=True | → STOP (DPDP consent revocation — absolute) |
-| `COST_001` | recovery_cost_inr > 5% of amount | → STOP (value-destructive retry prevention) |
-| `HARD_STOP_001` | card_blocked, fraud_flag, kyc_hold, stolen_card | â†’ escalate_to_human (RBI) |
-| `HARD_STOP_002` | card_expired, invalid_card + retry action | â†’ nudge_alt_method |
-| `RATE_LIMIT_001` | retry_count â‰¥ 3 + retry action | â†’ STOP |
-| `RATE_LIMIT_002` | contact_count_24h â‰¥ 1 + nudge action | â†’ retry_delayed (DPDP) |
-| `COOLDOWN_001` | last_contact < 30 min + retry_now | â†’ retry_delayed |
-| `WINDOW_001` | nudge outside 09:00â€“21:00 IST | â†’ retry_delayed (TRAI DND 9 PMâ€“9 AM) |
+Rules are evaluated in strict priority order — first rule that fires wins. See [ADR 0008](docs/adr/0008-guardrail-priority-ordering.md) for the full ordering rationale.
+
+| Priority | Rule ID | Trigger | Override |
+|---|---|---|---|
+| 1 | `HARD_STOP_001` | card_blocked, fraud_flag, kyc_hold, stolen_card | → escalate_to_human (RBI statutory — supersedes DPDP consent) |
+| 2 | `OPT_OUT_001` | customer_opted_out=True | → STOP (DPDP consent revocation) |
+| 3 | `COST_001` | recovery_cost_inr > 5% of amount | → STOP (value-destructive retry prevention) |
+| 4 | `HARD_STOP_002` | card_expired, invalid_card + retry action | → nudge_alt_method |
+| 5 | `RATE_LIMIT_001` | retry_count ≥ 3 + retry action | → STOP |
+| 6 | `RATE_LIMIT_002` | contact_count_24h ≥ 1 + nudge action | → retry_delayed (DPDP) |
+| 7 | `COOLDOWN_001` | last_contact < 30 min + retry_now | → retry_delayed |
+| 8 | `WINDOW_001` | nudge outside 09:00–21:00 IST | → retry_delayed (TRAI DND) |
 
 ---
 
