@@ -25,7 +25,6 @@ from schemas.explanation import LLMExplanation
 from schemas.transaction import FailedTransaction, FailureCode
 from tests.conftest import make_model_decision, make_txn
 
-
 # ---- TestOptOut001 -----------------------------------------------------------
 
 class TestOptOut001:
@@ -298,6 +297,7 @@ class TestNewFieldDefaults:
 
     def test_negative_recovery_cost_rejected(self) -> None:
         from datetime import UTC, datetime
+
         from schemas.transaction import PaymentMethod
         with pytest.raises(ValidationError):
             FailedTransaction(
