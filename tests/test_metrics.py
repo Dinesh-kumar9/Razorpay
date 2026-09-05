@@ -151,3 +151,114 @@ class TestMetricsFalseEscalation:
         assert metrics.false_escalation_count == 1
         assert metrics.false_escalation_rate_pct == pytest.approx(25.0)
         assert metrics.total_transactions == 4
+
+
+class TestUpliftCalculationsAndBaselines:
+    """Rigorous mathematical tests for dual/multi-baseline uplift calculations."""
+
+    def test_single_retry_uplift_uses_single_retry_denominator(self) -> None:
+        """
+        uplift_vs_blind_retry_pct must calculate:
+        ((agent_recovered - blind_recovered) / blind_recovered) * 100
+        """
+        record = _create_audit_record(
+            failure_code=FailureCode.INSUFFICIENT_FUNDS,
+            model_action=RecoveryAction.RETRY_NOW,
+            final_action=RecoveryAction.RETRY_NOW,
+            amount_inr=Decimal("10000"),
+            recovered=True,
+        )
+        blind = Decimal("2000")
+        constrained = Decimal("5000")
+        unconstrained = Decimal("8000")
+
+        metrics = compute_metrics(
+            records=[record],
+            recovered_blind_retry=blind,
+            recovered_naive_multi_retry=unconstrained,
+            seed=42,
+            recovered_constrained_multi_retry=constrained,
+        )
+
+        expected_single_uplift = float((Decimal("10000") - blind) / blind * 100)
+        assert metrics.uplift_vs_blind_retry_pct == pytest.approx(expected_single_uplift, rel=1e-3)
+        assert metrics.uplift_vs_blind_retry_pct == pytest.approx(400.0)
+
+    def test_constrained_multi_retry_uplift_uses_constrained_denominator(self) -> None:
+        """
+        uplift_vs_constrained_multi_retry_pct must calculate:
+        ((agent_recovered - constrained_recovered) / constrained_recovered) * 100
+        """
+        record = _create_audit_record(
+            failure_code=FailureCode.INSUFFICIENT_FUNDS,
+            model_action=RecoveryAction.RETRY_NOW,
+            final_action=RecoveryAction.RETRY_NOW,
+            amount_inr=Decimal("10000"),
+            recovered=True,
+        )
+        blind = Decimal("2000")
+        constrained = Decimal("5000")
+        unconstrained = Decimal("8000")
+
+        metrics = compute_metrics(
+            records=[record],
+            recovered_blind_retry=blind,
+            recovered_naive_multi_retry=unconstrained,
+            seed=42,
+            recovered_constrained_multi_retry=constrained,
+        )
+
+        expected_constrained_uplift = float((Decimal("10000") - constrained) / constrained * 100)
+        assert metrics.uplift_vs_constrained_multi_retry_pct == pytest.approx(expected_constrained_uplift, rel=1e-3)
+        assert metrics.uplift_vs_constrained_multi_retry_pct == pytest.approx(100.0)
+
+    def test_different_baselines_cannot_reuse_same_uplift(self) -> None:
+        """
+        Verify that single-retry, constrained multi-retry, and unconstrained multi-retry
+        calculate independent uplifts and cannot accidentally share the same value.
+        """
+        record = _create_audit_record(
+            failure_code=FailureCode.INSUFFICIENT_FUNDS,
+            model_action=RecoveryAction.RETRY_NOW,
+            final_action=RecoveryAction.RETRY_NOW,
+            amount_inr=Decimal("10000"),
+            recovered=True,
+        )
+        blind = Decimal("2000")          # +400.0% uplift
+        constrained = Decimal("5000")    # +100.0% uplift
+        unconstrained = Decimal("12500") # -20.0% uplift
+
+        metrics = compute_metrics(
+            records=[record],
+            recovered_blind_retry=blind,
+            recovered_naive_multi_retry=unconstrained,
+            seed=42,
+            recovered_constrained_multi_retry=constrained,
+            unconstrained_violations={"test_violation": 42},
+        )
+
+        assert metrics.uplift_vs_blind_retry_pct == pytest.approx(400.0)
+        assert metrics.uplift_vs_constrained_multi_retry_pct == pytest.approx(100.0)
+        assert metrics.uplift_vs_naive_multi_retry_pct == pytest.approx(-20.0)
+        assert metrics.unconstrained_violations_total == 42
+        # Ensure all three uplifts are distinct
+        assert len({metrics.uplift_vs_blind_retry_pct, metrics.uplift_vs_constrained_multi_retry_pct, metrics.uplift_vs_naive_multi_retry_pct}) == 3
+
+    def test_zero_baseline_avoids_division_by_zero(self) -> None:
+        record = _create_audit_record(
+            failure_code=FailureCode.INSUFFICIENT_FUNDS,
+            model_action=RecoveryAction.RETRY_NOW,
+            final_action=RecoveryAction.RETRY_NOW,
+            amount_inr=Decimal("10000"),
+            recovered=True,
+        )
+        metrics = compute_metrics(
+            records=[record],
+            recovered_blind_retry=Decimal("0"),
+            recovered_naive_multi_retry=Decimal("0"),
+            seed=42,
+            recovered_constrained_multi_retry=Decimal("0"),
+        )
+        assert metrics.uplift_vs_blind_retry_pct == 0.0
+        assert metrics.uplift_vs_constrained_multi_retry_pct == 0.0
+        assert metrics.uplift_vs_naive_multi_retry_pct == 0.0

@@ -151,6 +151,7 @@ def run_batch(
         explainer = LLMExplainer()
     executor = SimulatedExecutor()
     audit_log = AuditLogger(db_path)
+    audit_log.clear()
 
     # Load or train the model
     with console.status("[bold]Loading / training model...[/bold]"):
@@ -216,7 +217,14 @@ def run_batch(
             progress.advance(task)
 
     # Compute and display metrics
-    metrics = compute_metrics(records, recovered_blind, recovered_unconstrained, seed=seed)
+    metrics = compute_metrics(
+        records,
+        recovered_blind,
+        recovered_unconstrained,
+        seed=seed,
+        recovered_constrained_multi_retry=recovered_constrained,
+        unconstrained_violations=unconstrained_violations,
+    )
     _print_metrics_table(
         metrics,
         recovered_constrained=recovered_constrained,

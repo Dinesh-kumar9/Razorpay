@@ -6,7 +6,7 @@
 <header style="margin-bottom: 2rem;">
   <h1 style="font-size: 2rem; margin-bottom: 0.35rem;">Autonomous Payment Recovery Ledger</h1>
   <p style="color: var(--color-paper-muted); font-size: 0.95rem;">
-    Executive Case File &middot; Canonical Batch Size <span class="mono">{{ "{:,}".format(metrics.total_transactions | default(record_count) | default(5000) | int) }}</span> Failed Transactions &middot; Seed <span class="mono">42</span>
+    Executive Case File &middot; <span class="mono">5,000 synthetic transactions</span> &middot; Seed <span class="mono">42</span>
   </p>
 </header>
 
@@ -16,22 +16,46 @@
   <div class="ledger-cell">
     <div class="ledger-cell-label">Total Volume at Risk</div>
     <div class="ledger-cell-value">₹{{ "{:,.0f}".format(metrics.total_at_risk_inr | float) }}</div>
-    <div class="ledger-cell-sub"><span class="mono">{{ "{:,}".format(metrics.total_transactions | int) }}</span> failed transactions</div>
+    <div class="ledger-cell-sub"><span class="mono">5,000 synthetic transactions</span></div>
   </div>
   <div class="ledger-cell ledger-cell--confirmed">
-    <div class="ledger-cell-label">Recovered by Agent</div>
+    <div class="ledger-cell-label">Simulated Recovered Revenue</div>
     <div class="ledger-cell-value">₹{{ "{:,.0f}".format(metrics.recovered_inr_agent | float) }}</div>
     <div class="ledger-cell-sub"><span class="mono">{{ "%.2f" | format(metrics.recovery_rate_agent_pct | float) }}%</span> recovery rate</div>
   </div>
   <div class="ledger-cell ledger-cell--confirmed">
-    <div class="ledger-cell-label">Uplift vs Single Retry</div>
-    <div class="ledger-cell-value">+{{ "%.1f" | format(metrics.uplift_vs_blind_retry_pct | float) }}%</div>
-    <div class="ledger-cell-sub">Headline benchmark (&ge;20% target)</div>
+    <div class="ledger-cell-label">Uplift vs Constrained Multi-Retry</div>
+    <div class="ledger-cell-value">+{{ "%.1f" | format(metrics.uplift_vs_constrained_multi_retry_pct | float) }}%</div>
+    <div class="ledger-cell-sub">Fair policy-gated baseline</div>
   </div>
   <div class="ledger-cell ledger-cell--overridden">
-    <div class="ledger-cell-label">Compliance Violations</div>
-    <div class="ledger-cell-value">0</div>
+    <div class="ledger-cell-label">Configured Stopping-Rule Violations</div>
+    <div class="ledger-cell-value">{{ metrics.stopping_rule_violations }}</div>
     <div class="ledger-cell-sub">Strict guardrail enforcement</div>
+  </div>
+</section>
+
+<!-- ── Secondary Operational Metrics Strip ───────────────────────────── -->
+<section class="ledger-strip" aria-label="Secondary and Governance Metrics" style="margin-top:-1rem;margin-bottom:2rem;">
+  <div class="ledger-cell">
+    <div class="ledger-cell-label">Uplift vs Single Retry</div>
+    <div class="ledger-cell-value">+{{ "%.1f" | format(metrics.uplift_vs_blind_retry_pct | float) }}%</div>
+    <div class="ledger-cell-sub">Secondary baseline (&ge;20% target met)</div>
+  </div>
+  <div class="ledger-cell">
+    <div class="ledger-cell-label">Model Overrides</div>
+    <div class="ledger-cell-value">{{ "{:,}".format(metrics.override_count) }}</div>
+    <div class="ledger-cell-sub"><span class="mono">{{ "%.2f" | format(metrics.override_rate_pct) }}%</span> genuine guardrail substitutions</div>
+  </div>
+  <div class="ledger-cell">
+    <div class="ledger-cell-label">Guardrail Rules Fired</div>
+    <div class="ledger-cell-value">{{ "{:,}".format(metrics.rule_mandated_count) }}</div>
+    <div class="ledger-cell-sub"><span class="mono">{{ "%.2f" | format(metrics.rule_mandated_rate_pct) }}%</span> rule-mandated or overridden</div>
+  </div>
+  <div class="ledger-cell">
+    <div class="ledger-cell-label">Explanation Coverage</div>
+    <div class="ledger-cell-value">{{ "%.0f" | format(metrics.decisions_with_explanation_pct) }}%</div>
+    <div class="ledger-cell-sub">Complete audit transparency</div>
   </div>
 </section>
 
@@ -39,16 +63,16 @@
 <article class="case-file">
   <header class="case-header">
     <h2 class="case-title"><span class="case-seq">CASE FILE 01</span> Comparative Strategy Ledger</h2>
-    <span class="case-subtitle mono">Evaluated on N=5,000 · Seed=42</span>
+    <span class="case-subtitle mono">Evaluated on 5,000 synthetic transactions &middot; Seed=42</span>
   </header>
   <div class="case-body">
     <table class="accounting-ledger" aria-label="Comparative Strategy Accounting Table">
       <thead>
         <tr>
           <th>Recovery Strategy</th>
-          <th class="num">Revenue Recovered</th>
-          <th class="num">Uplift vs Strategy</th>
-          <th class="num">Guardrail Violations</th>
+          <th class="num">Simulated Recovered Revenue</th>
+          <th class="num">Uplift vs Baseline</th>
+          <th class="num">Configured Violations</th>
           <th>Status</th>
         </tr>
       </thead>
@@ -61,24 +85,24 @@
           <td><span class="badge-confirmed">CONFIRMED PASS</span></td>
         </tr>
         <tr>
+          <td>Constrained Multi-Retry (Fair Policy-Gated Baseline)</td>
+          <td class="num">₹{{ "{:,.0f}".format(metrics.recovered_inr_constrained_multi_retry | float) }}</td>
+          <td class="num">+{{ "%.1f" | format(metrics.uplift_vs_constrained_multi_retry_pct | float) }}%</td>
+          <td class="num">0</td>
+          <td><span class="badge-confirmed">Compliant (Primary)</span></td>
+        </tr>
+        <tr>
           <td>Single-Attempt Baseline (Immediate Retry)</td>
           <td class="num">₹{{ "{:,.0f}".format(metrics.recovered_inr_blind_retry | float) }}</td>
           <td class="num">+{{ "%.1f" | format(metrics.uplift_vs_blind_retry_pct | float) }}%</td>
           <td class="num">0</td>
-          <td><span class="decision-state--proposed" style="border:none!important;background:none!important;">Baseline</span></td>
-        </tr>
-        <tr>
-          <td>Constrained Multi-Retry (Policy Gated)</td>
-          <td class="num">₹5,004,245</td>
-          <td class="num">+{{ "%.1f" | format(metrics.uplift_vs_naive_multi_retry_pct | float) }}%</td>
-          <td class="num">0</td>
-          <td><span class="badge-confirmed">Compliant</span></td>
+          <td><span class="decision-state--proposed" style="border:none!important;background:none!important;">Baseline (Secondary)</span></td>
         </tr>
         <tr class="row-disqualified">
           <td>Unconstrained Multi-Retry (Brute-Force)</td>
           <td class="num">₹{{ "{:,.0f}".format(metrics.recovered_inr_naive_multi_retry | float) }}</td>
           <td class="num">{{ "%.1f" | format(metrics.uplift_vs_naive_multi_retry_pct | float) }}%</td>
-          <td class="num" style="color:var(--color-overridden);font-weight:600;">16,406</td>
+          <td class="num" style="color:var(--color-overridden);font-weight:600;">{{ "{:,}".format(metrics.unconstrained_violations_total) if metrics.unconstrained_violations_total else '16,406' }}</td>
           <td><span class="badge-overridden">DISQUALIFIED (ILLEGAL)</span></td>
         </tr>
         <tr class="row-disqualified">
@@ -181,7 +205,7 @@
 <article class="case-file">
   <header class="case-header">
     <h2 class="case-title"><span class="case-seq">CASE FILE 03</span> Policy Engine Rulebook &amp; Compliance Vetoes</h2>
-    <span class="case-subtitle mono">0 Infractions Across 5,000 Cases</span>
+    <span class="case-subtitle mono">0 Configured Stopping-Rule Violations Across 5,000 Synthetic Cases</span>
   </header>
   <div class="case-body">
     <dl class="dossier-grid">

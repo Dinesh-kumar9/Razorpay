@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import random
 from datetime import UTC, datetime
-from pathlib import Path
 
 from fastapi import APIRouter
 
-from audit.logger import AuditLogger
+from api.dependencies import get_demo_audit_logger
 from execution.executor import SimulatedExecutor
 from llm_layer.client import LLMExplainer
 from policy_engine.engine import PolicyEngine
@@ -49,7 +48,7 @@ async def simulate_single(txn: FailedTransaction) -> AuditRecord:
     """
     model = _get_model()
     explainer = _get_explainer()
-    audit = AuditLogger(Path("audit.db"))
+    audit = get_demo_audit_logger()
     rng = random.Random()
 
     model_decision = model.predict(txn)

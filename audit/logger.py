@@ -230,4 +230,5 @@ class AuditLogger:
         """
         with self._connect() as conn:
             conn.execute("DELETE FROM audit_records")
+            conn.execute("DELETE FROM sqlite_sequence WHERE name='audit_records'")
         logger.warning("Audit log cleared — this should only happen in tests.")

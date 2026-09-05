@@ -47,6 +47,7 @@ data/synthetic/*.json
 data/models/*.pkl
 data/models/*.json
 audit.db
+demo_audit.db
 
 # IDE
 .vscode/

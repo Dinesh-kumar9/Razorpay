@@ -31,6 +31,8 @@ def compute_metrics(
     recovered_blind_retry: Decimal,
     recovered_naive_multi_retry: Decimal,
     seed: int = 42,
+    recovered_constrained_multi_retry: Decimal | None = None,
+    unconstrained_violations: dict[str, int] | int | None = None,
 ) -> BatchMetrics:
     """
     Compute all batch-level metrics from a list of AuditRecords.
@@ -42,9 +44,10 @@ def compute_metrics(
     false_escalation_count: model (not policy engine) recommended escalation
     for a non-hard-stop code (unnecessary escalation of a recoverable transaction).
 
-    Two uplift figures are computed:
+    Baseline comparisons computed:
+      - vs constrained multi-retry baseline (primary headline benchmark)
       - vs single-attempt baseline (disclosed secondary figure)
-      - vs realistic 3-attempt multi-retry baseline (primary headline metric)
+      - vs unconstrained multi-retry baseline (illustrative comparison)
     """
     n = len(records)
     if n == 0:
@@ -54,9 +57,19 @@ def compute_metrics(
     total_recovered_agent = sum((r.amount_recovered_inr for r in records), Decimal("0"))
     recovery_rate_agent = float(total_recovered_agent / total_at_risk * 100) if total_at_risk else 0.0
 
-    # Dual uplift: single-attempt (secondary) and realistic multi-retry (headline)
+    # Independent uplift calculations against each baseline
     uplift_single = _compute_uplift(total_recovered_agent, recovered_blind_retry)
     uplift_multi = _compute_uplift(total_recovered_agent, recovered_naive_multi_retry)
+    uplift_constrained = (
+        _compute_uplift(total_recovered_agent, recovered_constrained_multi_retry)
+        if recovered_constrained_multi_retry is not None
+        else 0.0
+    )
+    violations_count = (
+        sum(unconstrained_violations.values())
+        if isinstance(unconstrained_violations, dict)
+        else (unconstrained_violations or 0)
+    )
 
     # Stopping-rule violations: hard-stop code processed WITHOUT escalation and NOT overridden
     # This would mean the policy engine missed a hard stop — must be 0.
@@ -105,9 +118,12 @@ def compute_metrics(
         recovery_rate_agent_pct=round(recovery_rate_agent, 2),
         recovered_inr_blind_retry=recovered_blind_retry,
         recovered_inr_naive_multi_retry=recovered_naive_multi_retry,
+        recovered_inr_constrained_multi_retry=recovered_constrained_multi_retry or Decimal("0"),
         recovered_inr_never_retry=Decimal("0"),
-        uplift_vs_blind_retry_pct=round(uplift_single, 2),
-        uplift_vs_naive_multi_retry_pct=round(uplift_multi, 2),
+        uplift_vs_blind_retry_pct=round(uplift_single, 4),
+        uplift_vs_constrained_multi_retry_pct=round(uplift_constrained, 4),
+        uplift_vs_naive_multi_retry_pct=round(uplift_multi, 4),
+        unconstrained_violations_total=violations_count,
         stopping_rule_violations=stopping_violations,
         decisions_with_explanation_pct=round(explanation_pct, 2),
         false_escalation_count=false_escalations,

@@ -133,16 +133,26 @@ class BatchMetrics(BaseModel):
 
     # Baseline comparisons
     recovered_inr_blind_retry: Decimal          # single-attempt naive baseline
-    recovered_inr_naive_multi_retry: Decimal    # 3-attempt realistic merchant baseline
+    recovered_inr_naive_multi_retry: Decimal    # 3-attempt realistic merchant baseline (unconstrained)
+    recovered_inr_constrained_multi_retry: Decimal = Decimal("0")  # fair policy-gated multi-retry baseline
     recovered_inr_never_retry: Decimal = Decimal("0")  # floor is always 0
 
     # Uplift vs single-attempt (secondary, disclosed figure)
     uplift_vs_blind_retry_pct: float = Field(
         description="% uplift in recovered Rs vs the single-attempt immediate-retry baseline (secondary figure)"
     )
-    # Uplift vs realistic multi-retry (PRIMARY headline metric)
+    # Uplift vs constrained multi-retry (PRIMARY headline benchmark)
+    uplift_vs_constrained_multi_retry_pct: float = Field(
+        default=0.0,
+        description="% uplift in recovered Rs vs the fair policy-gated multi-retry baseline (primary headline benchmark)",
+    )
+    # Uplift vs unconstrained multi-retry (illustrative comparison)
     uplift_vs_naive_multi_retry_pct: float = Field(
-        description="% uplift in recovered Rs vs the realistic 3-attempt merchant cron baseline (headline metric)"
+        description="% uplift in recovered Rs vs the unconstrained multi-retry baseline (illustrative comparison)"
+    )
+    unconstrained_violations_total: int = Field(
+        default=0,
+        description="Total rule violations committed by the unconstrained multi-retry baseline",
     )
 
     # Compliance metrics (directly answer "stopping rules" and "audit trail")

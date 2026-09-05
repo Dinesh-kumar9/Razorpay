@@ -12,8 +12,9 @@ router = APIRouter(tags=["batch"])
 
 # Canonical seed offsets — must match simulation/runner.py run_batch() and api/main.py.
 _SIMULATION_SEED: int = 42
-_BLIND_RETRY_SEED: int = _SIMULATION_SEED + 1000   # 1042
-_MULTI_RETRY_SEED: int = _SIMULATION_SEED + 1500   # 1542
+_BLIND_RETRY_SEED: int = _SIMULATION_SEED + 1000        # 1042
+_MULTI_RETRY_SEED: int = _SIMULATION_SEED + 1500        # 1542
+_CONSTRAINED_RETRY_SEED: int = _SIMULATION_SEED + 1750  # 1792
 
 
 @router.get("/health")
@@ -27,7 +28,11 @@ async def get_batch_metrics() -> BatchMetrics:
     import random
 
     from ingestion.generator import generate_transactions
-    from simulation.baselines import run_blind_retry_baseline, run_naive_multi_retry_baseline
+    from simulation.baselines import (
+        run_blind_retry_baseline,
+        run_naive_multi_retry_constrained,
+        run_naive_multi_retry_with_violations,
+    )
     from simulation.metrics import compute_metrics
 
     audit = get_audit_logger()
@@ -41,9 +46,18 @@ async def get_batch_metrics() -> BatchMetrics:
     txns = generate_transactions(n=record_count, random_seed=_SIMULATION_SEED)
     blind_rng = random.Random(_BLIND_RETRY_SEED)
     multi_rng = random.Random(_MULTI_RETRY_SEED)
+    constrained_rng = random.Random(_CONSTRAINED_RETRY_SEED)
     recovered_blind = run_blind_retry_baseline(txns, blind_rng)
-    recovered_multi = run_naive_multi_retry_baseline(txns, multi_rng)
-    return compute_metrics(records, recovered_blind, recovered_multi, seed=_SIMULATION_SEED)
+    recovered_multi, violations = run_naive_multi_retry_with_violations(txns, multi_rng)
+    recovered_constrained = run_naive_multi_retry_constrained(txns, constrained_rng)
+    return compute_metrics(
+        records,
+        recovered_blind,
+        recovered_multi,
+        seed=_SIMULATION_SEED,
+        recovered_constrained_multi_retry=recovered_constrained,
+        unconstrained_violations=violations,
+    )
 
 
 class TransactionListResponse(BaseModel):

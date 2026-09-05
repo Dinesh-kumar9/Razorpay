@@ -6,7 +6,7 @@
 > The LLM never touches money or state -- it only touches language.
 
 ![CI](https://github.com/Dinesh-kumar9/Razorpay/actions/workflows/ci.yml/badge.svg)
-![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen?logo=pytest&label=coverage)
+![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen?logo=pytest&label=coverage)
 ![Python](https://img.shields.io/badge/python-3.12-blue?logo=python)
 
 ---
@@ -229,7 +229,7 @@ project-meridian/
 +-- simulation/      Batch runner + baselines + metrics
 +-- api/             FastAPI app (JSON API + HTMX routes)
 +-- dashboard/       Jinja2 templates + CSS
-+-- tests/           pytest suite (154 tests, 92% coverage, all policy paths)
++-- tests/           pytest suite (165 tests, 93% coverage, all policy paths)
 +-- docs/            ADRs + data provenance
 ```
 
